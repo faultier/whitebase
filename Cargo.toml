@@ -1,0 +1,9 @@
+[package]
+
+name = "whitebase"
+version = "0.1.0"
+authors = ["faultier"]
+
+[[lib]]
+
+name = "whitebase"
