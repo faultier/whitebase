@@ -1,4 +1,5 @@
 pub use self::assembly::Assembly;
+pub use self::brainfuck::Brainfuck;
 pub use self::dt::DT;
 pub use self::ook::Ook;
 pub use self::whitespace::Whitespace;
@@ -40,8 +41,6 @@ pub enum Instruction {
 }
 
 pub trait Syntax {
-    fn new() -> Self;
-
     fn parse_str<'a>(&self, input: &'a str, output: &mut AST) -> IoResult<()>;
 
     fn parse<B: Buffer>(&self, input: &mut B, output: &mut AST) -> IoResult<()>;
@@ -135,6 +134,7 @@ pub trait Syntax {
 }
 
 pub mod assembly;
+pub mod brainfuck;
 pub mod dt;
 pub mod ook;
 pub mod whitespace;

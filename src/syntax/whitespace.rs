@@ -19,9 +19,24 @@ macro_rules! write_num (
     )
 )
 
+#[deriving(PartialEq, Show)]
+pub enum WhitespaceToken {
+    Space,
+    Tab,
+    LF,
+}
+
+pub trait WhitespaceSyntax {
+    fn parse_ws_str<'a>(&self, input: &'a str, output: &mut Vec<WhitespaceToken>) -> IoResult<()>;
+    fn parse_ws<B: Buffer>(&self, input: &mut B, output: &mut Vec<WhitespaceToken>) -> IoResult<()>;
+    fn token_to_str(&self, token: WhitespaceToken) -> &'static str;
+}
+
 pub struct Whitespace;
 
 impl Whitespace {
+    pub fn new() -> Whitespace { Whitespace }
+
     fn read_char<B: Buffer>(&self, source: &mut B) -> IoResult<char> {
         loop {
             match source.read_char() {
@@ -88,8 +103,6 @@ impl Whitespace {
 }
 
 impl Syntax for Whitespace {
-    fn new() -> Whitespace { Whitespace }
-
     fn parse_str<'a>(&self, input: &'a str, output: &mut AST) -> IoResult<()> {
         self.parse(&mut BufReader::new(input.as_bytes()), output)
     }
@@ -279,7 +292,7 @@ mod test {
             " \n\n",        // DISCARD
             " \t\n \t\n",   // SLIDE 1
             ).concat();
-        let syntax: Whitespace = Syntax::new();
+        let syntax = Whitespace::new();
         let mut ast: AST = vec!();
         syntax.parse_str(source.as_slice(), &mut ast).unwrap();
         assert_eq!(ast.shift(), Some(WBPush(1)));
@@ -300,7 +313,7 @@ mod test {
             "\t \t ",   // DIV
             "\t \t\t",  // MOD
             ).concat();
-        let syntax: Whitespace = Syntax::new();
+        let syntax = Whitespace::new();
         let mut ast: AST = vec!();
         syntax.parse_str(source.as_slice(), &mut ast).unwrap();
         assert_eq!(ast.shift(), Some(WBAddition));
@@ -317,7 +330,7 @@ mod test {
             "\t\t ",    // STORE
             "\t\t\t",   // RETRIEVE
             ).concat();
-        let syntax: Whitespace = Syntax::new();
+        let syntax = Whitespace::new();
         let mut ast: AST = vec!();
         syntax.parse_str(source.as_slice(), &mut ast).unwrap();
         assert_eq!(ast.shift(), Some(WBStore));
@@ -336,7 +349,7 @@ mod test {
             "\n\t\n",       // RETURN
             "\n\n\n",       // EXIT
             ).concat();
-        let syntax: Whitespace = Syntax::new();
+        let syntax = Whitespace::new();
         let mut ast: AST = vec!();
         syntax.parse_str(source.as_slice(), &mut ast).unwrap();
         assert_eq!(ast.shift(), Some(WBMark(1)));
@@ -357,7 +370,7 @@ mod test {
             "\t\n\t ",  // GETC
             "\t\n\t\t", // GETN
             ).concat();
-        let syntax: Whitespace = Syntax::new();
+        let syntax = Whitespace::new();
         let mut ast: AST = vec!();
         syntax.parse_str(source.as_slice(), &mut ast).unwrap();
         assert_eq!(ast.shift(), Some(WBPutCharactor));
@@ -398,7 +411,7 @@ mod test {
             bcw.write_getn().unwrap();
 
             let mut bcr = MemReader::new(bcw.unwrap());
-            let syntax: Whitespace = Syntax::new();
+            let syntax = Whitespace::new();
             syntax.decompile(&mut bcr, &mut writer).unwrap();
         }
         let result = from_utf8(writer.get_ref()).unwrap().replace(" ", "S").replace("\t", "T").replace("\n", "N");

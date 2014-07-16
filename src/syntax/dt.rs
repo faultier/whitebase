@@ -29,9 +29,11 @@ static N: &'static str = "…";
 
 pub struct DT;
 
-impl Syntax for DT {
-    fn new() -> DT { DT }
+impl DT {
+    pub fn new() -> DT { DT }
+}
 
+impl Syntax for DT {
     fn parse_str<'a>(&self, input: &'a str, output: &mut AST) -> IoResult<()> {
         let mut buffer = String::new();
         for pos in regex!("ど|童貞ちゃうわっ！|…").find_iter(input) {
@@ -43,7 +45,7 @@ impl Syntax for DT {
                 _ => return Err(standard_error(InvalidInput)),
             }
         }
-        let ws: Whitespace = Syntax::new();
+        let ws = Whitespace::new();
         ws.parse_str(buffer.as_slice(), output)
     }
 
@@ -114,7 +116,7 @@ mod test {
             S, N, N,            // DISCARD
             S, T, N, S, T, N,   // SLIDE 1
             ).concat();
-        let syntax: DT = Syntax::new();
+        let syntax = DT::new();
         let mut ast: AST = vec!();
         syntax.parse_str(source.as_slice(), &mut ast).unwrap();
         assert_eq!(ast.shift(), Some(WBPush(1)));
@@ -135,7 +137,7 @@ mod test {
             T, S, T, S, // DIV
             T, S, T, T, // MOD
             ).concat();
-        let syntax: DT = Syntax::new();
+        let syntax = DT::new();
         let mut ast: AST = vec!();
         syntax.parse_str(source.as_slice(), &mut ast).unwrap();
         assert_eq!(ast.shift(), Some(WBAddition));
@@ -152,7 +154,7 @@ mod test {
             T, T, S,    // STORE
             T, T, T,    // RETRIEVE
             ).concat();
-        let syntax: DT = Syntax::new();
+        let syntax = DT::new();
         let mut ast: AST = vec!();
         syntax.parse_str(source.as_slice(), &mut ast).unwrap();
         assert_eq!(ast.shift(), Some(WBStore));
@@ -171,7 +173,7 @@ mod test {
             N, T, N,            // RETURN
             N, N, N,            // EXIT
             ).concat();
-        let syntax: DT = Syntax::new();
+        let syntax = DT::new();
         let mut ast: AST = vec!();
         syntax.parse_str(source.as_slice(), &mut ast).unwrap();
         assert_eq!(ast.shift(), Some(WBMark(1)));
@@ -192,7 +194,7 @@ mod test {
             T, N, T, S, // GETC
             T, N, T, T, // GETN
             ).concat();
-        let syntax: DT = Syntax::new();
+        let syntax = DT::new();
         let mut ast: AST = vec!();
         syntax.parse_str(source.as_slice(), &mut ast).unwrap();
         assert_eq!(ast.shift(), Some(WBPutCharactor));
@@ -233,7 +235,7 @@ mod test {
             bcw.write_getn().unwrap();
 
             let mut bcr = MemReader::new(bcw.unwrap());
-            let syntax: DT = Syntax::new();
+            let syntax = DT::new();
             syntax.decompile(&mut bcr, &mut writer).unwrap();
         }
         let result = from_utf8(writer.get_ref()).unwrap();

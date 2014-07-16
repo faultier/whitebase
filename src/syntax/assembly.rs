@@ -18,9 +18,11 @@ macro_rules! try_number(
 )
 pub struct Assembly;
 
-impl Syntax for Assembly {
-    fn new() -> Assembly { Assembly }
+impl Assembly {
+    pub fn new() -> Assembly { Assembly }
+}
 
+impl Syntax for Assembly {
     fn parse_str<'a>(&self, input: &'a str, output: &mut AST) -> IoResult<()> {
         self.parse(&mut BufReader::new(input.as_bytes()), output)
     }
@@ -136,7 +138,7 @@ mod test {
             "DISCARD",
             "SLIDE 1000",
             ).connect("\n");
-        let syntax: Assembly = Syntax::new();
+        let syntax = Assembly::new();
         let mut ast: AST = vec!();
         syntax.parse_str(source.as_slice(), &mut ast).unwrap();
         assert_eq!(ast.shift(), Some(WBPush(1)));
@@ -157,7 +159,7 @@ mod test {
             "DIV",
             "MOD",
             ).connect("\n");
-        let syntax: Assembly = Syntax::new();
+        let syntax = Assembly::new();
         let mut ast: AST = vec!();
         syntax.parse_str(source.as_slice(), &mut ast).unwrap();
         assert_eq!(ast.shift(), Some(WBAddition));
@@ -174,7 +176,7 @@ mod test {
             "STORE",
             "RETRIEVE",
             ).connect("\n");
-        let syntax: Assembly = Syntax::new();
+        let syntax = Assembly::new();
         let mut ast: AST = vec!();
         syntax.parse_str(source.as_slice(), &mut ast).unwrap();
         assert_eq!(ast.shift(), Some(WBStore));
@@ -193,7 +195,7 @@ mod test {
             "RETURN",
             "EXIT",
             ).connect("\n");
-        let syntax: Assembly = Syntax::new();
+        let syntax = Assembly::new();
         let mut ast: AST = vec!();
         syntax.parse_str(source.as_slice(), &mut ast).unwrap();
         assert_eq!(ast.shift(), Some(WBMark(1)));
@@ -214,7 +216,7 @@ mod test {
             "GETC",
             "GETN",
             ).connect("\n");
-        let syntax: Assembly = Syntax::new();
+        let syntax = Assembly::new();
         let mut ast: AST = vec!();
         syntax.parse_str(source.as_slice(), &mut ast).unwrap();
         assert_eq!(ast.shift(), Some(WBPutCharactor));
@@ -254,7 +256,7 @@ mod test {
             bcw.write_getc().unwrap();
             bcw.write_getn().unwrap();
             let mut bcr = MemReader::new(bcw.unwrap());
-            let syntax: Assembly = Syntax::new();
+            let syntax = Assembly::new();
             syntax.decompile(&mut bcr, &mut writer).unwrap();
         }
         let result = from_utf8(writer.get_ref()).unwrap();
