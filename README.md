@@ -18,30 +18,25 @@ This project provides infrastructure for implementing esolang.
 ```rust
 extern crate whitebase;
 
-use std::io::{BufferedReader, File, MemReader, MemWriter};
-use std::io::stdio::{stdin, stdout_raw};
-use whitebase::machine::Machine;
-use whitebase::syntax::{Syntax, Whitespace};
+use std::io::{BufReader, MemReader, MemWriter};
+use whitebase::machine;
+use whitebase::syntax::{Compiler, Whitespace};
 
 fn main() {
-    match File::open(&Path::new("hello.ws")) {
-        Ok(file) => {
-            let mut buffer = BufferedReader::new(file);
-            let mut writer = MemWriter::new();
-            let ws = Whitespace::new();
-            match ws.compile(&mut buffer, &mut writer) {
+    let src = "   \t\t \t  \t\n   \t  \t   \n\t\n  \t\n  \n\n\n";
+    let mut buffer = BufReader::new(src.as_bytes());
+    let mut writer = MemWriter::new();
+    let ws = Whitespace::new();
+    match ws.compile(&mut buffer, &mut writer) {
+        Err(e) => fail!("{}", e),
+        _ => {
+            let mut reader = MemReader::new(writer.unwrap());
+            let mut machine = machine::with_stdio();
+            match machine.run(&mut reader) {
                 Err(e) => fail!("{}", e),
-                _ => {
-                    let mut reader = MemReader::new(writer.unwrap());
-                    let mut machine = Machine::new(stdin(), stdout_raw());
-                    match machine.run(&mut reader) {
-                        Err(e) => fail!("{}", e),
-                        _ => (),
-                    }
-                },
+                _ => (),
             }
         },
-        Err(e) => fail!("{}", e),
     }
 }
 ```

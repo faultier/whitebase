@@ -33,7 +33,7 @@ pub static CMD_PUTN: u8     = IMP_IO + 0b0010;
 pub static CMD_GETC: u8     = IMP_IO + 0b1000;
 pub static CMD_GETN: u8     = IMP_IO + 0b1010;
 
-#[allow(missing_doc)]
+#[allow(missing_doc)] // FIXME
 pub trait ByteCodeWriter {
     fn write_push(&mut self, n: i64) -> IoResult<()>;
     fn write_dup(&mut self) -> IoResult<()>;
