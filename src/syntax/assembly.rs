@@ -1,10 +1,12 @@
+//! Assembler and Disassembler.
+
 use std::collections::HashMap;
-use std::io::{BufReader, EndOfFile, InvalidInput, IoError, IoResult, standard_error};
-use std::iter::count;
+use std::io::{EndOfFile, InvalidInput, IoError, IoResult, standard_error};
+use std::iter::{Counter, count};
 
 use bytecode::ByteCodeReader;
 use syntax;
-use syntax::{AST, Syntax};
+use syntax::{AST, Compiler, Decompiler};
 
 macro_rules! try_number(
     ($val:expr) => (match from_str($val) {
@@ -16,17 +18,27 @@ macro_rules! try_number(
         }),
     })
 )
+
+/// Assembler and Disassembler.
 pub struct Assembly;
 
 impl Assembly {
+    /// Create a new `Assembly`.
     pub fn new() -> Assembly { Assembly }
+
+    fn marker(&self, label: String, labels: &mut HashMap<String, i64>, counter: &mut Counter<i64>) -> i64 {
+        match labels.find_copy(&label) {
+            Some(val) => val,
+            None => {
+                let val = counter.next().unwrap();
+                labels.insert(label, val);
+                val
+            },
+        }
+    }
 }
 
-impl Syntax for Assembly {
-    fn parse_str<'a>(&self, input: &'a str, output: &mut AST) -> IoResult<()> {
-        self.parse(&mut BufReader::new(input.as_bytes()), output)
-    }
-
+impl Compiler for Assembly {
     fn parse<B: Buffer>(&self, input: &mut B, output: &mut AST) -> IoResult<()> {
         let mut labels = HashMap::new();
         let mut counter = count(1, 1);
@@ -79,7 +91,9 @@ impl Syntax for Assembly {
         }
         Ok(())
     }
+}
 
+impl Decompiler for Assembly {
     fn decompile<R: ByteCodeReader, W: Writer>(&self, input: &mut R, output: &mut W) -> IoResult<()> {
         let mut ast = vec!();
         try!(self.disassemble(input, &mut ast));

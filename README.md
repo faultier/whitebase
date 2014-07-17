@@ -17,19 +17,27 @@ This project provides infrastructure for implementing esolang.
 ```rust
 extern crate whitebase;
 
-use std::io::{BufferedReader, File};
+use std::io::{BufferedReader, File, MemReader, MemWriter};
 use std::io::stdio::{stdin, stdout_raw};
-use whitebase::machine::Interpreter;
-use whitebase::syntax::Whitespace;
+use whitebase::machine::Machine;
+use whitebase::syntax::{Syntax, Whitespace};
 
 fn main() {
     match File::open(&Path::new("hello.ws")) {
         Ok(file) => {
             let mut buffer = BufferedReader::new(file);
-            let ip = Interpreter::new(stdin(), stdout_raw(), Whitespace::new());
-            match ip.run(&mut buffer) {
+            let mut writer = MemWriter::new();
+            let ws = Whitespace::new();
+            match ws.compile(&mut buffer, &mut writer) {
                 Err(e) => fail!("{}", e),
-                _ => (),
+                _ => {
+                    let mut reader = MemReader::new(writer.unwrap());
+                    let mut machine = Machine::new(stdin(), stdout_raw());
+                    match machine.run(&mut reader) {
+                        Err(e) => fail!("{}", e),
+                        _ => (),
+                    }
+                },
             }
         },
         Err(e) => fail!("{}", e),

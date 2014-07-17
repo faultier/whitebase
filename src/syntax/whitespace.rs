@@ -1,11 +1,13 @@
+//! Parser and Generator for Whitespace.
+
 use std::collections::HashMap;
-use std::io::{BufReader, EndOfFile, InvalidInput, IoError, IoResult, standard_error};
+use std::io::{EndOfFile, InvalidInput, IoError, IoResult, standard_error};
 use std::iter::{Counter, count};
 use std::num::from_str_radix;
 
 use bytecode::ByteCodeReader;
 use syntax;
-use syntax::{AST, Instruction, Syntax};
+use syntax::{AST, Instruction, Compiler, Decompiler};
 
 macro_rules! write_num (
     ($w:expr, $cmd:expr, $n:expr) => (
@@ -19,6 +21,7 @@ macro_rules! write_num (
     )
 )
 
+#[allow(missing_doc)]
 #[deriving(PartialEq, Show)]
 pub enum Token {
     Space,
@@ -65,6 +68,7 @@ impl<I: Iterator<IoResult<char>>> Iterator<IoResult<Token>> for Tokens<I> {
     }
 }
 
+/// Parser for Whitespace.
 pub struct Parser<T> {
     iter: T,
     labels: HashMap<String, i64>,
@@ -80,6 +84,7 @@ fn unknown_instruction(inst: &'static str) -> IoError {
 }
 
 impl<I: Iterator<IoResult<Token>>> Parser<I> {
+    /// Create a new `Parser` with token iterator.
     pub fn new(iter: I) -> Parser<I> {
         Parser {
             iter: iter,
@@ -88,6 +93,7 @@ impl<I: Iterator<IoResult<Token>>> Parser<I> {
         }
     }
 
+    /// Parse Whitespace tokens.
     pub fn parse(&mut self, output: &mut AST) -> IoResult<()> {
         loop {
             let ret = match self.iter.next() {
@@ -267,21 +273,21 @@ impl<I: Iterator<IoResult<Token>>> Parser<I> {
     }
 }
 
+/// Compiler and Decompiler for Whitespace.
 pub struct Whitespace;
 
 impl Whitespace {
+    /// Create a new `Whitespace`.
     pub fn new() -> Whitespace { Whitespace }
 }
 
-impl Syntax for Whitespace {
-    fn parse_str<'a>(&self, input: &'a str, output: &mut AST) -> IoResult<()> {
-        self.parse(&mut BufReader::new(input.as_bytes()), output)
-    }
-
+impl Compiler for Whitespace {
     fn parse<B: Buffer>(&self, input: &mut B, output: &mut AST) -> IoResult<()> {
         Parser::new(Tokens { iter: Scan { buffer: input } }).parse(output)
     }
+}
 
+impl Decompiler for Whitespace {
     fn decompile<R: ByteCodeReader, W: Writer>(&self, input: &mut R, output: &mut W) -> IoResult<()> {
         let mut ast = vec!();
         try!(self.disassemble(input, &mut ast));

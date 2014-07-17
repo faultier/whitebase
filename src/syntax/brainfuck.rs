@@ -1,14 +1,16 @@
+//! Parser for Brainfuck.
+
 use std::collections::HashMap;
-use std::io::{BufReader, EndOfFile, InvalidInput, IoResult, IoError, standard_error};
+use std::io::{EndOfFile, InvalidInput, IoResult, IoError, standard_error};
 use std::iter::{Counter, count};
 
-use bytecode::ByteCodeReader;
 use syntax;
-use syntax::{AST, Syntax};
+use syntax::{AST, Compiler};
 
 pub static BF_FAIL_MARKER: i64 = -1;
 pub static BF_PTR_ADDR: i64 = -1;
 
+#[allow(missing_doc)]
 #[deriving(PartialEq, Show)]
 pub enum Token {
     MoveRight,
@@ -70,6 +72,7 @@ impl<I: Iterator<IoResult<char>>> Iterator<IoResult<Token>> for Tokens<I> {
     }
 }
 
+/// Parser for Brainfuck.
 pub struct Parser<T> {
     iter: T,
     stack: Vec<i64>,
@@ -77,6 +80,7 @@ pub struct Parser<T> {
 }
 
 impl<I: Iterator<IoResult<Token>>> Parser<I> {
+    /// Create a new `Parser` with token iterator.
     pub fn new(iter: I) -> Parser<I> {
         Parser {
             iter: iter,
@@ -85,6 +89,7 @@ impl<I: Iterator<IoResult<Token>>> Parser<I> {
         }
     }
 
+    /// Parse Brainfuck tokens.
     pub fn parse(&mut self, output: &mut AST) -> IoResult<()> {
         let mut labels = HashMap::new();
         let mut count = count(1, 1);
@@ -181,26 +186,18 @@ impl<I: Iterator<IoResult<Token>>> Parser<I> {
     }
 }
 
+/// Compiler for Brainfuck.
 pub struct Brainfuck;
 
 impl Brainfuck {
+    /// Create a new `Brainfuck`.
     pub fn new() -> Brainfuck { Brainfuck }
 }
 
-impl Syntax for Brainfuck {
-    fn parse_str<'a>(&self, input: &'a str, output: &mut AST) -> IoResult<()> {
-        self.parse(&mut BufReader::new(input.as_bytes()), output)
-    }
-
+impl Compiler for Brainfuck {
     fn parse<B: Buffer>(&self, input: &mut B, output: &mut AST) -> IoResult<()> {
         Parser::new(Tokens { iter: Scan { buffer: input } }).parse(output)
     }
-
-    #[allow(unused_variable)]
-    fn decompile<R: ByteCodeReader, W: Writer>(&self, input: &mut R, output: &mut W) -> IoResult<()> {
-        unimplemented!()
-    }
-
 }
 
 #[cfg(test)]

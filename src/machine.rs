@@ -1,23 +1,34 @@
+//! A virtual machine that execute Whitebase bytecode.
+
 use std::collections::HashMap;
 use std::collections::TreeMap;
-use std::io::{EndOfFile, InvalidInput, IoError, MemReader, MemWriter, SeekSet, standard_error};
-use bc = bytecode;
+use std::io::{BufferedReader, EndOfFile, InvalidInput, IoError, SeekSet, standard_error};
+use std::io::stdio::{StdReader, StdWriter, stdin, stdout_raw};
+use bytecode;
 use bytecode::ByteCodeReader;
-use syntax::Syntax;
 
 pub type MachineResult<T> = Result<T, MachineError>;
 
+/// A list specifying VM error.
 #[deriving(PartialEq, Show)]
 pub enum MachineError {
+    /// Empty stack poped.
     IllegalStackManipulation,
+    /// Tried to jump unmarked position.
     UndefinedLabel,
+    /// Divide by zero.
     ZeroDivision,
+    /// "RETURN" instruction was executed without "CALL".
     CallStackEmpty,
+    /// Program includes no "EXIT" instruction.
     MissingExitInstruction,
+    /// I/O error occurred.
     MachineIoError(IoError),
+    /// Any runtime error not part of this list.
     OtherMachineError,
 }
 
+/// A virtual machine.
 pub struct Machine<B, W> {
     stack: Vec<i64>,
     heap: TreeMap<i64, i64>,
@@ -25,7 +36,13 @@ pub struct Machine<B, W> {
     stdout: W,
 }
 
+/// Create a new `Machine` with stdin and stdout.
+pub fn with_stdio() -> Machine<BufferedReader<StdReader>, StdWriter> {
+    Machine::new(stdin(), stdout_raw())
+}
+
 impl<B: Buffer, W: Writer> Machine<B, W> {
+    /// Creates a new `Machine` with input and output.
     pub fn new(stdin: B, stdout: W) -> Machine<B, W> {
         Machine {
             stack: Vec::new(),
@@ -35,6 +52,7 @@ impl<B: Buffer, W: Writer> Machine<B, W> {
         }
     }
 
+    /// Run program.
     pub fn run(&mut self, program: &mut ByteCodeReader) -> MachineResult<()> {
         let mut index = HashMap::new();
         let mut caller = vec!();
@@ -49,30 +67,30 @@ impl<B: Buffer, W: Writer> Machine<B, W> {
 
     fn step(&mut self, program: &mut ByteCodeReader, index: &mut HashMap<i64, u64>, caller: &mut Vec<u64>) -> MachineResult<bool> {
         match program.read_inst() {
-            Ok((bc::CMD_PUSH, n))       => { try!(self.push(n)); Ok(true) },
-            Ok((bc::CMD_DUP, _))        => { try!(self.copy(0)); Ok(true) },
-            Ok((bc::CMD_COPY, n))       => { try!(self.copy(n.to_uint().unwrap())); Ok(true) },
-            Ok((bc::CMD_SWAP, _))       => { try!(self.swap()); Ok(true) },
-            Ok((bc::CMD_DISCARD, _))    => { try!(self.discard()); Ok(true) },
-            Ok((bc::CMD_SLIDE, n))      => { try!(self.slide(n.to_uint().unwrap())); Ok(true) },
-            Ok((bc::CMD_ADD, _))        => { try!(self.calc(|x, y| { y + x })); Ok(true) },
-            Ok((bc::CMD_SUB, _))        => { try!(self.calc(|x, y| { y - x })); Ok(true) },
-            Ok((bc::CMD_MUL, _))        => { try!(self.calc(|x, y| { y * x })); Ok(true) },
-            Ok((bc::CMD_DIV, _))        => { try!(self.dcalc(|x, y| { y / x })); Ok(true) },
-            Ok((bc::CMD_MOD, _))        => { try!(self.dcalc(|x, y| { y % x })); Ok(true) },
-            Ok((bc::CMD_STORE, _))      => { try!(self.store()); Ok(true) },
-            Ok((bc::CMD_RETRIEVE, _))   => { try!(self.retrieve()); Ok(true) },
-            Ok((bc::CMD_MARK, _))       => Ok(true),
-            Ok((bc::CMD_CALL, n))       => { try!(self.call(program, index, caller, &n)); Ok(true) },
-            Ok((bc::CMD_JUMP, n))       => { try!(self.jump(program, index, &n)); Ok(true) },
-            Ok((bc::CMD_JUMPZ, n))      => { try!(self.jump_if(program, index, &n, |x| { x == 0 })); Ok(true) },
-            Ok((bc::CMD_JUMPN, n))      => { try!(self.jump_if(program, index, &n, |x| { x < 0 })); Ok(true) },
-            Ok((bc::CMD_RETURN, _))     => { try!(self.do_return(program, caller)); Ok(true) },
-            Ok((bc::CMD_EXIT, _))       => Ok(false),
-            Ok((bc::CMD_PUTC, _))       => { try!(self.put_char()); Ok(true) },
-            Ok((bc::CMD_PUTN, _))       => { try!(self.put_num()); Ok(true) },
-            Ok((bc::CMD_GETC, _))       => { try!(self.get_char()); Ok(true) },
-            Ok((bc::CMD_GETN, _))       => { try!(self.get_num()); Ok(true) },
+            Ok((bytecode::CMD_PUSH, n))       => { try!(self.push(n)); Ok(true) },
+            Ok((bytecode::CMD_DUP, _))        => { try!(self.copy(0)); Ok(true) },
+            Ok((bytecode::CMD_COPY, n))       => { try!(self.copy(n.to_uint().unwrap())); Ok(true) },
+            Ok((bytecode::CMD_SWAP, _))       => { try!(self.swap()); Ok(true) },
+            Ok((bytecode::CMD_DISCARD, _))    => { try!(self.discard()); Ok(true) },
+            Ok((bytecode::CMD_SLIDE, n))      => { try!(self.slide(n.to_uint().unwrap())); Ok(true) },
+            Ok((bytecode::CMD_ADD, _))        => { try!(self.calc(|x, y| { y + x })); Ok(true) },
+            Ok((bytecode::CMD_SUB, _))        => { try!(self.calc(|x, y| { y - x })); Ok(true) },
+            Ok((bytecode::CMD_MUL, _))        => { try!(self.calc(|x, y| { y * x })); Ok(true) },
+            Ok((bytecode::CMD_DIV, _))        => { try!(self.dcalc(|x, y| { y / x })); Ok(true) },
+            Ok((bytecode::CMD_MOD, _))        => { try!(self.dcalc(|x, y| { y % x })); Ok(true) },
+            Ok((bytecode::CMD_STORE, _))      => { try!(self.store()); Ok(true) },
+            Ok((bytecode::CMD_RETRIEVE, _))   => { try!(self.retrieve()); Ok(true) },
+            Ok((bytecode::CMD_MARK, _))       => Ok(true),
+            Ok((bytecode::CMD_CALL, n))       => { try!(self.call(program, index, caller, &n)); Ok(true) },
+            Ok((bytecode::CMD_JUMP, n))       => { try!(self.jump(program, index, &n)); Ok(true) },
+            Ok((bytecode::CMD_JUMPZ, n))      => { try!(self.jump_if(program, index, &n, |x| { x == 0 })); Ok(true) },
+            Ok((bytecode::CMD_JUMPN, n))      => { try!(self.jump_if(program, index, &n, |x| { x < 0 })); Ok(true) },
+            Ok((bytecode::CMD_RETURN, _))     => { try!(self.do_return(program, caller)); Ok(true) },
+            Ok((bytecode::CMD_EXIT, _))       => Ok(false),
+            Ok((bytecode::CMD_PUTC, _))       => { try!(self.put_char()); Ok(true) },
+            Ok((bytecode::CMD_PUTN, _))       => { try!(self.put_num()); Ok(true) },
+            Ok((bytecode::CMD_GETC, _))       => { try!(self.get_char()); Ok(true) },
+            Ok((bytecode::CMD_GETN, _))       => { try!(self.get_num()); Ok(true) },
             Err(ref e) if e.kind == EndOfFile => Err(MissingExitInstruction),
             Err(e)                      => Err(MachineIoError(e)),
             _                           => Err(OtherMachineError),
@@ -209,7 +227,7 @@ impl<B: Buffer, W: Writer> Machine<B, W> {
             None => {
                 loop {
                     match program.read_inst() {
-                        Ok((opcode, operand)) if opcode == bc::CMD_MARK => {
+                        Ok((opcode, operand)) if opcode == bytecode::CMD_MARK => {
                             match program.tell() {
                                 Ok(pos) => {
                                     index.insert(operand, pos);
@@ -292,33 +310,6 @@ impl<B: Buffer, W: Writer> Machine<B, W> {
                 None => Err(MachineIoError(standard_error(InvalidInput))),
             },
             Err(err) => Err(MachineIoError(err)),
-        }
-    }
-}
-
-pub struct Interpreter<B, W, S> {
-    stdin: B,
-    stdout: W,
-    syntax: S,
-}
-
-impl<B: Buffer, W: Writer, S: Syntax> Interpreter<B, W, S> {
-    pub fn new(stdin: B, stdout: W, syntax: S) -> Interpreter<B, W, S> {
-        Interpreter { stdin: stdin, stdout: stdout, syntax: syntax }
-    }
-
-    pub fn run<B: Buffer>(self, buffer: &mut B) -> MachineResult<()> {
-        let mut writer = MemWriter::new();
-        match self.syntax.compile(buffer, &mut writer) {
-            Err(e) => Err(MachineIoError(e)),
-            _ => {
-                let mut reader = MemReader::new(writer.unwrap());
-                let mut machine = Machine::new(self.stdin, self.stdout);
-                match machine.run(&mut reader) {
-                    Err(e) => Err(e),
-                    _ => Ok(()),
-                }
-            }
         }
     }
 }

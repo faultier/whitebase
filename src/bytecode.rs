@@ -1,3 +1,5 @@
+//! Bytecode utilities.
+
 use std::io::IoResult;
 
 pub static IMP_STACK: u8      = 0b0011 << 4;
@@ -31,6 +33,7 @@ pub static CMD_PUTN: u8     = IMP_IO + 0b0010;
 pub static CMD_GETC: u8     = IMP_IO + 0b1000;
 pub static CMD_GETN: u8     = IMP_IO + 0b1010;
 
+#[allow(missing_doc)]
 pub trait ByteCodeWriter {
     fn write_push(&mut self, n: i64) -> IoResult<()>;
     fn write_dup(&mut self) -> IoResult<()>;
@@ -164,7 +167,9 @@ impl<W: Writer> ByteCodeWriter for W {
     }
 }
 
+/// Bytecodes reader.
 pub trait ByteCodeReader: Reader + Seek {
+    /// Read instruction bytes.
     fn read_inst(&mut self) -> IoResult<(u8, i64)>;
 }
 

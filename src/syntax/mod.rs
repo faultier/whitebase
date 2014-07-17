@@ -1,17 +1,18 @@
+//! Compilers and Decompilers.
+
 pub use self::assembly::Assembly;
 pub use self::brainfuck::Brainfuck;
 pub use self::dt::DT;
 pub use self::ook::Ook;
 pub use self::whitespace::Whitespace;
 
-use std::collections::HashMap;
-use std::io::{IoResult, EndOfFile, InvalidInput, standard_error};
-use std::iter::Counter;
-use bc = bytecode;
+use std::io::{BufReader, EndOfFile, InvalidInput, IoResult, standard_error};
+use bytecode;
 use bytecode::{ByteCodeWriter, ByteCodeReader};
 
 pub type AST = Vec<Instruction>;
 
+#[allow(missing_doc)]
 #[deriving(PartialEq, Show, Clone)]
 pub enum Instruction {
     WBPush(i64),
@@ -40,11 +41,17 @@ pub enum Instruction {
     WBGetNumber,
 }
 
-pub trait Syntax {
-    fn parse_str<'a>(&self, input: &'a str, output: &mut AST) -> IoResult<()>;
+/// Converter from source code to bytecodes.
+pub trait Compiler {
+    /// Read source code from buffer, then generate AST.
+    fn parse<B: Buffer>(&self, &mut B, &mut AST) -> IoResult<()>;
 
-    fn parse<B: Buffer>(&self, input: &mut B, output: &mut AST) -> IoResult<()>;
+    /// Read source code from string, then generate AST.
+    fn parse_str<'a>(&self, input: &'a str, output: &mut AST) -> IoResult<()> {
+        self.parse(&mut BufReader::new(input.as_bytes()), output)
+    }
 
+    /// Convert AST to bytecode.
     fn compile<B: Buffer, W: ByteCodeWriter>(&self, input: &mut B, output: &mut W) -> IoResult<()> {
         let mut ast = vec!();
         try!(self.parse(input, &mut ast));
@@ -82,34 +89,41 @@ pub trait Syntax {
         }
         Ok(())
     }
+}
 
+/// Source code generator from bytecoeds.
+pub trait Decompiler {
+    /// Generate soruce code from bytecodes.
+    fn decompile<R: ByteCodeReader, W: Writer>(&self, &mut R, &mut W) -> IoResult<()>;
+
+    /// Generate AST from byte codes.
     fn disassemble<R: ByteCodeReader>(&self, input: &mut R, output: &mut AST) -> IoResult<()> {
         loop {
             let ret = match input.read_inst() {
-                Ok((bc::CMD_PUSH, n))     => WBPush(n),
-                Ok((bc::CMD_DUP, _))      => WBDuplicate,
-                Ok((bc::CMD_COPY, n))     => WBCopy(n),
-                Ok((bc::CMD_SWAP, _))     => WBSwap,
-                Ok((bc::CMD_DISCARD, _))  => WBDiscard,
-                Ok((bc::CMD_SLIDE, n))    => WBSlide(n),
-                Ok((bc::CMD_ADD, _))      => WBAddition,
-                Ok((bc::CMD_SUB, _))      => WBSubtraction,
-                Ok((bc::CMD_MUL, _))      => WBMultiplication,
-                Ok((bc::CMD_DIV, _))      => WBDivision,
-                Ok((bc::CMD_MOD, _))      => WBModulo,
-                Ok((bc::CMD_STORE, _))    => WBStore,
-                Ok((bc::CMD_RETRIEVE, _)) => WBRetrieve,
-                Ok((bc::CMD_MARK, n))     => WBMark(n),
-                Ok((bc::CMD_CALL, n))     => WBCall(n),
-                Ok((bc::CMD_JUMP, n))     => WBJump(n),
-                Ok((bc::CMD_JUMPZ, n))    => WBJumpIfZero(n),
-                Ok((bc::CMD_JUMPN, n))    => WBJumpIfNegative(n),
-                Ok((bc::CMD_RETURN, _))   => WBReturn,
-                Ok((bc::CMD_EXIT, _))     => WBExit,
-                Ok((bc::CMD_PUTC, _))     => WBPutCharactor,
-                Ok((bc::CMD_PUTN, _))     => WBPutNumber,
-                Ok((bc::CMD_GETC, _))     => WBGetCharactor,
-                Ok((bc::CMD_GETN, _))     => WBGetNumber,
+                Ok((bytecode::CMD_PUSH, n))     => WBPush(n),
+                Ok((bytecode::CMD_DUP, _))      => WBDuplicate,
+                Ok((bytecode::CMD_COPY, n))     => WBCopy(n),
+                Ok((bytecode::CMD_SWAP, _))     => WBSwap,
+                Ok((bytecode::CMD_DISCARD, _))  => WBDiscard,
+                Ok((bytecode::CMD_SLIDE, n))    => WBSlide(n),
+                Ok((bytecode::CMD_ADD, _))      => WBAddition,
+                Ok((bytecode::CMD_SUB, _))      => WBSubtraction,
+                Ok((bytecode::CMD_MUL, _))      => WBMultiplication,
+                Ok((bytecode::CMD_DIV, _))      => WBDivision,
+                Ok((bytecode::CMD_MOD, _))      => WBModulo,
+                Ok((bytecode::CMD_STORE, _))    => WBStore,
+                Ok((bytecode::CMD_RETRIEVE, _)) => WBRetrieve,
+                Ok((bytecode::CMD_MARK, n))     => WBMark(n),
+                Ok((bytecode::CMD_CALL, n))     => WBCall(n),
+                Ok((bytecode::CMD_JUMP, n))     => WBJump(n),
+                Ok((bytecode::CMD_JUMPZ, n))    => WBJumpIfZero(n),
+                Ok((bytecode::CMD_JUMPN, n))    => WBJumpIfNegative(n),
+                Ok((bytecode::CMD_RETURN, _))   => WBReturn,
+                Ok((bytecode::CMD_EXIT, _))     => WBExit,
+                Ok((bytecode::CMD_PUTC, _))     => WBPutCharactor,
+                Ok((bytecode::CMD_PUTN, _))     => WBPutNumber,
+                Ok((bytecode::CMD_GETC, _))     => WBGetCharactor,
+                Ok((bytecode::CMD_GETN, _))     => WBGetNumber,
                 Err(ref e) if e.kind == EndOfFile => break,
                 Err(e)                    => return Err(e),
                 _                         => return Err(standard_error(InvalidInput)),
@@ -117,19 +131,6 @@ pub trait Syntax {
             output.push(ret);
         }
         Ok(())
-    }
-
-    fn decompile<R: ByteCodeReader, W: Writer>(&self, input: &mut R, output: &mut W) -> IoResult<()>;
-
-    fn marker(&self, label: String, labels: &mut HashMap<String, i64>, counter: &mut Counter<i64>) -> i64 {
-        match labels.find_copy(&label) {
-            Some(val) => val,
-            None => {
-                let val = counter.next().unwrap();
-                labels.insert(label, val);
-                val
-            },
-        }
     }
 }
 

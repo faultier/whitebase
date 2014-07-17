@@ -1,0 +1,21 @@
+language: rust
+
+install:
+  - sh ./install-deps.sh
+
+script:
+  - make
+  - make test -j4
+  - make install DESTDIR=${PWD}/destdir
+
+env:
+  global:
+    - LD_LIBRARY_PATH=/usr/local/lib
+    - DYLD_LIBRARY_PATH=/usr/local/lib
+  matrix:
+    - BITS=32
+    - BITS=64
+
+os:
+  - linux
+  - osx

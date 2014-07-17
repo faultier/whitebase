@@ -1,8 +1,10 @@
-use std::io::{BufReader, EndOfFile, InvalidInput, IoError, IoResult, standard_error};
+//! Parser and Generator for DT.
+
+use std::io::{EndOfFile, InvalidInput, IoError, IoResult, standard_error};
 
 use bytecode::ByteCodeReader;
 use syntax;
-use syntax::{AST, Syntax};
+use syntax::{AST, Compiler, Decompiler};
 use syntax::whitespace::{Parser, Token, Space, Tab, LF};
 
 static S: &'static str = "ど";
@@ -62,9 +64,11 @@ impl<I: Iterator<IoResult<String>>> Iterator<IoResult<Token>> for Tokens<I> {
     }
 }
 
+/// Compiler and Decompiler for DT.
 pub struct DT;
 
 impl DT {
+    /// Create a new `DT`.
     pub fn new() -> DT { DT }
 
     #[inline]
@@ -83,15 +87,13 @@ impl DT {
     }
 }
 
-impl Syntax for DT {
-    fn parse_str<'a>(&self, input: &'a str, output: &mut AST) -> IoResult<()> {
-        self.parse(&mut BufReader::new(input.as_bytes()), output)
-    }
-
+impl Compiler for DT {
     fn parse<B: Buffer>(&self, input: &mut B, output: &mut AST) -> IoResult<()> {
         Parser::new(Tokens { iter: Scan { buffer: input } }).parse(output)
     }
+}
 
+impl Decompiler for DT {
     fn decompile<R: ByteCodeReader, W: Writer>(&self, input: &mut R, output: &mut W) -> IoResult<()> {
         let mut ast = vec!();
         try!(self.disassemble(input, &mut ast));

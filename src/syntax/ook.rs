@@ -1,8 +1,9 @@
-use std::io::{BufReader, EndOfFile, InvalidInput, IoError, IoResult, standard_error};
+//! Parser for Ook!
+
+use std::io::{EndOfFile, InvalidInput, IoError, IoResult, standard_error};
 use std::str::from_utf8;
 
-use bytecode::ByteCodeReader;
-use syntax::{AST, Syntax};
+use syntax::{AST, Compiler};
 use syntax::brainfuck::{Parser, Token, MoveRight, MoveLeft, Increment, Decrement, Put, Get, LoopStart, LoopEnd};
 
 fn is_whitespace(c: &char) -> bool {
@@ -94,26 +95,18 @@ impl<I: Iterator<IoResult<String>>> Iterator<IoResult<Token>> for Tokens<I> {
     }
 }
 
+/// Compiler for Ook!.
 pub struct Ook;
 
 impl Ook {
+    /// Create a new `Ook`.
     pub fn new() -> Ook { Ook }
 }
 
-impl Syntax for Ook {
-    fn parse_str<'a>(&self, input: &'a str, output: &mut AST) -> IoResult<()> {
-        self.parse(&mut BufReader::new(input.as_bytes()), output)
-    }
-
+impl Compiler for Ook {
     fn parse<B: Buffer>(&self, input: &mut B, output: &mut AST) -> IoResult<()> {
         Parser::new(Tokens { iter: Scan { buffer: input, is_start: true } }).parse(output)
     }
-
-    #[allow(unused_variable)]
-    fn decompile<R: ByteCodeReader, W: Writer>(&self, input: &mut R, output: &mut W) -> IoResult<()> {
-        unimplemented!()
-    }
-
 }
 
 #[cfg(test)]
