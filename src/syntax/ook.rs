@@ -3,7 +3,8 @@
 use std::io::{EndOfFile, InvalidInput, IoError, IoResult, standard_error};
 use std::str::from_utf8;
 
-use syntax::{AST, Compiler};
+use ir::Instruction;
+use syntax::Compiler;
 use syntax::brainfuck::{Parser, Token, MoveRight, MoveLeft, Increment, Decrement, Put, Get, LoopStart, LoopEnd};
 
 fn is_whitespace(c: &char) -> bool {
@@ -104,7 +105,7 @@ impl Ook {
 }
 
 impl Compiler for Ook {
-    fn parse<B: Buffer>(&self, input: &mut B, output: &mut AST) -> IoResult<()> {
+    fn parse<B: Buffer>(&self, input: &mut B, output: &mut Vec<Instruction>) -> IoResult<()> {
         Parser::new(Tokens { iter: Scan { buffer: input, is_start: true } }).parse(output)
     }
 }
@@ -112,6 +113,7 @@ impl Compiler for Ook {
 #[cfg(test)]
 mod test {
     use super::*;
+    use ir::*;
     use syntax::*;
     use syntax::brainfuck::*;
     use std::io::BufReader;

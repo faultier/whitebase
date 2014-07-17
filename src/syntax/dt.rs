@@ -3,8 +3,9 @@
 use std::io::{EndOfFile, InvalidInput, IoError, IoResult, standard_error};
 
 use bytecode::ByteCodeReader;
-use syntax;
-use syntax::{AST, Compiler, Decompiler};
+use ir;
+use ir::Instruction;
+use syntax::{Compiler, Decompiler};
 use syntax::whitespace::{Parser, Token, Space, Tab, LF};
 
 static S: &'static str = "ど";
@@ -88,7 +89,7 @@ impl DT {
 }
 
 impl Compiler for DT {
-    fn parse<B: Buffer>(&self, input: &mut B, output: &mut AST) -> IoResult<()> {
+    fn parse<B: Buffer>(&self, input: &mut B, output: &mut Vec<Instruction>) -> IoResult<()> {
         Parser::new(Tokens { iter: Scan { buffer: input } }).parse(output)
     }
 }
@@ -99,30 +100,30 @@ impl Decompiler for DT {
         try!(self.disassemble(input, &mut ast));
         for inst in ast.iter() {
             let ret = match inst {
-                &syntax::WBPush(n)              => self.write_num(output, [S, S], n),
-                &syntax::WBDuplicate            => self.write(output, [S, N, S]),
-                &syntax::WBCopy(n)              => self.write_num(output, [S, T, S], n),
-                &syntax::WBSwap                 => self.write(output, [S, N, T]),
-                &syntax::WBDiscard              => self.write(output, [S, N, N]),
-                &syntax::WBSlide(n)             => self.write_num(output, [S, T, N], n),
-                &syntax::WBAddition             => self.write(output, [T, S, S, S]),
-                &syntax::WBSubtraction          => self.write(output, [T, S, S, T]),
-                &syntax::WBMultiplication       => self.write(output, [T, S, S, N]),
-                &syntax::WBDivision             => self.write(output, [T, S, T, S]),
-                &syntax::WBModulo               => self.write(output, [T, S, T, T]),
-                &syntax::WBStore                => self.write(output, [T, T, S]),
-                &syntax::WBRetrieve             => self.write(output, [T, T, T]),
-                &syntax::WBMark(n)              => self.write_num(output, [N, S, S], n),
-                &syntax::WBCall(n)              => self.write_num(output, [N, S, T], n),
-                &syntax::WBJump(n)              => self.write_num(output, [N, S, N], n),
-                &syntax::WBJumpIfZero(n)        => self.write_num(output, [N, T, S], n),
-                &syntax::WBJumpIfNegative(n)    => self.write_num(output, [N, T, T], n),
-                &syntax::WBReturn               => self.write(output, [N, T, N]),
-                &syntax::WBExit                 => self.write(output, [N, N, N]),
-                &syntax::WBPutCharactor         => self.write(output, [T, N, S, S]),
-                &syntax::WBPutNumber            => self.write(output, [T, N, S, T]),
-                &syntax::WBGetCharactor         => self.write(output, [T, N, T, S]),
-                &syntax::WBGetNumber            => self.write(output, [T, N, T, T]),
+                &ir::WBPush(n)              => self.write_num(output, [S, S], n),
+                &ir::WBDuplicate            => self.write(output, [S, N, S]),
+                &ir::WBCopy(n)              => self.write_num(output, [S, T, S], n),
+                &ir::WBSwap                 => self.write(output, [S, N, T]),
+                &ir::WBDiscard              => self.write(output, [S, N, N]),
+                &ir::WBSlide(n)             => self.write_num(output, [S, T, N], n),
+                &ir::WBAddition             => self.write(output, [T, S, S, S]),
+                &ir::WBSubtraction          => self.write(output, [T, S, S, T]),
+                &ir::WBMultiplication       => self.write(output, [T, S, S, N]),
+                &ir::WBDivision             => self.write(output, [T, S, T, S]),
+                &ir::WBModulo               => self.write(output, [T, S, T, T]),
+                &ir::WBStore                => self.write(output, [T, T, S]),
+                &ir::WBRetrieve             => self.write(output, [T, T, T]),
+                &ir::WBMark(n)              => self.write_num(output, [N, S, S], n),
+                &ir::WBCall(n)              => self.write_num(output, [N, S, T], n),
+                &ir::WBJump(n)              => self.write_num(output, [N, S, N], n),
+                &ir::WBJumpIfZero(n)        => self.write_num(output, [N, T, S], n),
+                &ir::WBJumpIfNegative(n)    => self.write_num(output, [N, T, T], n),
+                &ir::WBReturn               => self.write(output, [N, T, N]),
+                &ir::WBExit                 => self.write(output, [N, N, N]),
+                &ir::WBPutCharactor         => self.write(output, [T, N, S, S]),
+                &ir::WBPutNumber            => self.write(output, [T, N, S, T]),
+                &ir::WBGetCharactor         => self.write(output, [T, N, T, S]),
+                &ir::WBGetNumber            => self.write(output, [T, N, T, T]),
             };
             match ret {
                 Err(e) => return Err(e),
@@ -139,6 +140,7 @@ mod test {
     use std::str::from_utf8;
 
     use super::*;
+    use ir::*;
     use syntax::*;
     use syntax::whitespace::*;
 
@@ -181,7 +183,7 @@ mod test {
             S, T, N, S, T, N,   // SLIDE 1
             ).concat();
         let syntax = DT::new();
-        let mut ast: AST = vec!();
+        let mut ast: Vec<Instruction> = vec!();
         syntax.parse_str(source.as_slice(), &mut ast).unwrap();
         assert_eq!(ast.shift(), Some(WBPush(1)));
         assert_eq!(ast.shift(), Some(WBDuplicate));
@@ -202,7 +204,7 @@ mod test {
             T, S, T, T, // MOD
             ).concat();
         let syntax = DT::new();
-        let mut ast: AST = vec!();
+        let mut ast: Vec<Instruction> = vec!();
         syntax.parse_str(source.as_slice(), &mut ast).unwrap();
         assert_eq!(ast.shift(), Some(WBAddition));
         assert_eq!(ast.shift(), Some(WBSubtraction));
@@ -219,7 +221,7 @@ mod test {
             T, T, T,    // RETRIEVE
             ).concat();
         let syntax = DT::new();
-        let mut ast: AST = vec!();
+        let mut ast: Vec<Instruction> = vec!();
         syntax.parse_str(source.as_slice(), &mut ast).unwrap();
         assert_eq!(ast.shift(), Some(WBStore));
         assert_eq!(ast.shift(), Some(WBRetrieve));
@@ -238,7 +240,7 @@ mod test {
             N, N, N,            // EXIT
             ).concat();
         let syntax = DT::new();
-        let mut ast: AST = vec!();
+        let mut ast: Vec<Instruction> = vec!();
         syntax.parse_str(source.as_slice(), &mut ast).unwrap();
         assert_eq!(ast.shift(), Some(WBMark(1)));
         assert_eq!(ast.shift(), Some(WBCall(2)));
@@ -259,7 +261,7 @@ mod test {
             T, N, T, T, // GETN
             ).concat();
         let syntax = DT::new();
-        let mut ast: AST = vec!();
+        let mut ast: Vec<Instruction> = vec!();
         syntax.parse_str(source.as_slice(), &mut ast).unwrap();
         assert_eq!(ast.shift(), Some(WBPutCharactor));
         assert_eq!(ast.shift(), Some(WBPutNumber));

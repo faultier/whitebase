@@ -4,8 +4,9 @@ use std::collections::HashMap;
 use std::io::{EndOfFile, InvalidInput, IoResult, IoError, standard_error};
 use std::iter::{Counter, count};
 
-use syntax;
-use syntax::{AST, Compiler};
+use ir;
+use ir::Instruction;
+use syntax::Compiler;
 
 pub static BF_FAIL_MARKER: i64 = -1;
 pub static BF_PTR_ADDR: i64 = -1;
@@ -90,7 +91,7 @@ impl<I: Iterator<IoResult<Token>>> Parser<I> {
     }
 
     /// Parse Brainfuck tokens.
-    pub fn parse(&mut self, output: &mut AST) -> IoResult<()> {
+    pub fn parse(&mut self, output: &mut Vec<Instruction>) -> IoResult<()> {
         let mut labels = HashMap::new();
         let mut count = count(1, 1);
         let marker = |label: String| -> i64 {
@@ -107,67 +108,67 @@ impl<I: Iterator<IoResult<Token>>> Parser<I> {
         for token in self.iter {
             match token {
                 Ok(MoveRight) => {
-                    output.push(syntax::WBPush(BF_PTR_ADDR));
-                    output.push(syntax::WBDuplicate);
-                    output.push(syntax::WBRetrieve);
-                    output.push(syntax::WBPush(1));
-                    output.push(syntax::WBAddition);
-                    output.push(syntax::WBStore);
+                    output.push(ir::WBPush(BF_PTR_ADDR));
+                    output.push(ir::WBDuplicate);
+                    output.push(ir::WBRetrieve);
+                    output.push(ir::WBPush(1));
+                    output.push(ir::WBAddition);
+                    output.push(ir::WBStore);
                 },
                 Ok(MoveLeft) => {
-                    output.push(syntax::WBPush(BF_PTR_ADDR));
-                    output.push(syntax::WBDuplicate);
-                    output.push(syntax::WBRetrieve);
-                    output.push(syntax::WBPush(1));
-                    output.push(syntax::WBSubtraction);
-                    output.push(syntax::WBDuplicate);
-                    output.push(syntax::WBJumpIfNegative(BF_FAIL_MARKER));
-                    output.push(syntax::WBStore);
+                    output.push(ir::WBPush(BF_PTR_ADDR));
+                    output.push(ir::WBDuplicate);
+                    output.push(ir::WBRetrieve);
+                    output.push(ir::WBPush(1));
+                    output.push(ir::WBSubtraction);
+                    output.push(ir::WBDuplicate);
+                    output.push(ir::WBJumpIfNegative(BF_FAIL_MARKER));
+                    output.push(ir::WBStore);
                 },
                 Ok(Increment) => {
-                    output.push(syntax::WBPush(BF_PTR_ADDR));
-                    output.push(syntax::WBRetrieve);
-                    output.push(syntax::WBDuplicate);
-                    output.push(syntax::WBRetrieve);
-                    output.push(syntax::WBPush(1));
-                    output.push(syntax::WBAddition);
-                    output.push(syntax::WBStore);
+                    output.push(ir::WBPush(BF_PTR_ADDR));
+                    output.push(ir::WBRetrieve);
+                    output.push(ir::WBDuplicate);
+                    output.push(ir::WBRetrieve);
+                    output.push(ir::WBPush(1));
+                    output.push(ir::WBAddition);
+                    output.push(ir::WBStore);
                 },
                 Ok(Decrement) => {
-                    output.push(syntax::WBPush(BF_PTR_ADDR));
-                    output.push(syntax::WBRetrieve);
-                    output.push(syntax::WBDuplicate);
-                    output.push(syntax::WBRetrieve);
-                    output.push(syntax::WBPush(1));
-                    output.push(syntax::WBSubtraction);
-                    output.push(syntax::WBStore);
+                    output.push(ir::WBPush(BF_PTR_ADDR));
+                    output.push(ir::WBRetrieve);
+                    output.push(ir::WBDuplicate);
+                    output.push(ir::WBRetrieve);
+                    output.push(ir::WBPush(1));
+                    output.push(ir::WBSubtraction);
+                    output.push(ir::WBStore);
                 },
                 Ok(Get) => {
-                    output.push(syntax::WBPush(BF_PTR_ADDR));
-                    output.push(syntax::WBRetrieve);
-                    output.push(syntax::WBRetrieve);
-                    output.push(syntax::WBGetCharactor);
+                    output.push(ir::WBPush(BF_PTR_ADDR));
+                    output.push(ir::WBRetrieve);
+                    output.push(ir::WBRetrieve);
+                    output.push(ir::WBGetCharactor);
                 },
                 Ok(Put) => {
-                    output.push(syntax::WBPush(BF_PTR_ADDR));
-                    output.push(syntax::WBRetrieve);
-                    output.push(syntax::WBRetrieve);
-                    output.push(syntax::WBPutCharactor);
+                    output.push(ir::WBPush(BF_PTR_ADDR));
+                    output.push(ir::WBRetrieve);
+                    output.push(ir::WBRetrieve);
+                    output.push(ir::WBPutCharactor);
                 },
                 Ok(LoopStart) => {
                     let l: i64 = self.lcount.next().unwrap();
                     self.stack.push(l);
-                    output.push(syntax::WBMark(marker(format!("{}#", l))));
-                    output.push(syntax::WBPush(BF_PTR_ADDR));
-                    output.push(syntax::WBRetrieve);
-                    output.push(syntax::WBRetrieve);
-                    output.push(syntax::WBJumpIfZero(marker(format!("#{}", l))));
+                    output.push(ir::WBMark(marker(format!("{}#", l))));
+                    output.push(ir::WBPush(BF_PTR_ADDR));
+                    output.push(ir::WBRetrieve);
+                    output.push(ir::WBRetrieve);
+                    output.push(ir::WBJumpIfZero(marker(format!("#{}", l))));
                 },
                 Ok(LoopEnd) => {
                     match self.stack.pop() {
                         Some(l) => {
-                            output.push(syntax::WBJump(marker(format!("{}#", l))));
-                            output.push(syntax::WBMark(marker(format!("#{}", l))));
+                            output.push(ir::WBJump(marker(format!("{}#", l))));
+                            output.push(ir::WBMark(marker(format!("#{}", l))));
                         },
                         None => return Err(IoError {
                             kind: InvalidInput,
@@ -179,8 +180,8 @@ impl<I: Iterator<IoResult<Token>>> Parser<I> {
                 Err(e) => return Err(e),
             }
         }
-        output.push(syntax::WBExit);
-        output.push(syntax::WBMark(BF_FAIL_MARKER));
+        output.push(ir::WBExit);
+        output.push(ir::WBMark(BF_FAIL_MARKER));
 
         Ok(())
     }
@@ -195,7 +196,7 @@ impl Brainfuck {
 }
 
 impl Compiler for Brainfuck {
-    fn parse<B: Buffer>(&self, input: &mut B, output: &mut AST) -> IoResult<()> {
+    fn parse<B: Buffer>(&self, input: &mut B, output: &mut Vec<Instruction>) -> IoResult<()> {
         Parser::new(Tokens { iter: Scan { buffer: input } }).parse(output)
     }
 }
@@ -203,7 +204,8 @@ impl Compiler for Brainfuck {
 #[cfg(test)]
 mod test {
     use super::*;
-    use syntax::*;
+    use ir::*;
+    use syntax::Compiler;
     use std::io::BufReader;
 
     #[test]

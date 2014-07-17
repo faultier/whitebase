@@ -37,5 +37,6 @@ match File::open(&Path::new("hello.ws")) {
 #[phase(plugin, link)] extern crate log;
 
 pub mod bytecode;
-pub mod syntax;
+pub mod ir;
 pub mod machine;
+pub mod syntax;

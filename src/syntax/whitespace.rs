@@ -6,8 +6,9 @@ use std::iter::{Counter, count};
 use std::num::from_str_radix;
 
 use bytecode::ByteCodeReader;
-use syntax;
-use syntax::{AST, Instruction, Compiler, Decompiler};
+use ir;
+use ir::Instruction;
+use syntax::{Compiler, Decompiler};
 
 macro_rules! write_num (
     ($w:expr, $cmd:expr, $n:expr) => (
@@ -94,7 +95,7 @@ impl<I: Iterator<IoResult<Token>>> Parser<I> {
     }
 
     /// Parse Whitespace tokens.
-    pub fn parse(&mut self, output: &mut AST) -> IoResult<()> {
+    pub fn parse(&mut self, output: &mut Vec<Instruction>) -> IoResult<()> {
         loop {
             let ret = match self.iter.next() {
                 Some(Ok(Space)) => self.parse_stack(),
@@ -170,17 +171,17 @@ impl<I: Iterator<IoResult<Token>>> Parser<I> {
 
     fn parse_stack(&mut self) -> IoResult<Instruction> {
         match self.iter.next() {
-            Some(Ok(Space)) => Ok(syntax::WBPush(try!(self.parse_number()))),
+            Some(Ok(Space)) => Ok(ir::WBPush(try!(self.parse_number()))),
             Some(Ok(LF)) => match self.iter.next() {
-                Some(Ok(Space)) => Ok(syntax::WBDuplicate),
-                Some(Ok(Tab)) => Ok(syntax::WBSwap),
-                Some(Ok(LF)) => Ok(syntax::WBDiscard),
+                Some(Ok(Space)) => Ok(ir::WBDuplicate),
+                Some(Ok(Tab)) => Ok(ir::WBSwap),
+                Some(Ok(LF)) => Ok(ir::WBDiscard),
                 Some(Err(e)) => Err(e),
                 None => Err(unknown_instruction("SN")),
             },
             Some(Ok(Tab)) => match self.iter.next() {
-                Some(Ok(Space)) => Ok(syntax::WBCopy(try!(self.parse_number()))),
-                Some(Ok(LF)) => Ok(syntax::WBSlide(try!(self.parse_number()))),
+                Some(Ok(Space)) => Ok(ir::WBCopy(try!(self.parse_number()))),
+                Some(Ok(LF)) => Ok(ir::WBSlide(try!(self.parse_number()))),
                 Some(Ok(Tab)) => Err(unknown_instruction("STT")),
                 Some(Err(e)) => Err(e),
                 None => Err(unknown_instruction("ST")),
@@ -193,15 +194,15 @@ impl<I: Iterator<IoResult<Token>>> Parser<I> {
     fn parse_arithmetic(&mut self) -> IoResult<Instruction> {
         match self.iter.next() {
             Some(Ok(Space)) => match self.iter.next() {
-                Some(Ok(Space)) => Ok(syntax::WBAddition),
-                Some(Ok(Tab)) => Ok(syntax::WBSubtraction),
-                Some(Ok(LF)) => Ok(syntax::WBMultiplication),
+                Some(Ok(Space)) => Ok(ir::WBAddition),
+                Some(Ok(Tab)) => Ok(ir::WBSubtraction),
+                Some(Ok(LF)) => Ok(ir::WBMultiplication),
                 Some(Err(e)) => Err(e),
                 None => Err(unknown_instruction("TSS")),
             },
             Some(Ok(Tab)) => match self.iter.next() {
-                Some(Ok(Space)) => Ok(syntax::WBDivision),
-                Some(Ok(Tab)) => Ok(syntax::WBModulo),
+                Some(Ok(Space)) => Ok(ir::WBDivision),
+                Some(Ok(Tab)) => Ok(ir::WBModulo),
                 Some(Ok(LF)) => Err(unknown_instruction("TSTN")),
                 Some(Err(e)) => Err(e),
                 None => Err(unknown_instruction("TST")),
@@ -214,8 +215,8 @@ impl<I: Iterator<IoResult<Token>>> Parser<I> {
 
     fn parse_heap(&mut self) -> IoResult<Instruction> {
         match self.iter.next() {
-            Some(Ok(Space)) => Ok(syntax::WBStore),
-            Some(Ok(Tab)) => Ok(syntax::WBRetrieve),
+            Some(Ok(Space)) => Ok(ir::WBStore),
+            Some(Ok(Tab)) => Ok(ir::WBRetrieve),
             Some(Err(e)) => Err(e),
             Some(Ok(LF)) => Err(unknown_instruction("TTN")),
             None => Err(unknown_instruction("TT")),
@@ -225,21 +226,21 @@ impl<I: Iterator<IoResult<Token>>> Parser<I> {
     fn parse_flow(&mut self) -> IoResult<Instruction> {
         match self.iter.next() {
             Some(Ok(Space)) => match self.iter.next() {
-                Some(Ok(Space)) => Ok(syntax::WBMark(try!(self.parse_label()))),
-                Some(Ok(Tab)) => Ok(syntax::WBCall(try!(self.parse_label()))),
-                Some(Ok(LF)) => Ok(syntax::WBJump(try!(self.parse_label()))),
+                Some(Ok(Space)) => Ok(ir::WBMark(try!(self.parse_label()))),
+                Some(Ok(Tab)) => Ok(ir::WBCall(try!(self.parse_label()))),
+                Some(Ok(LF)) => Ok(ir::WBJump(try!(self.parse_label()))),
                 Some(Err(e)) => Err(e),
                 None => Err(unknown_instruction("NS")),
             },
             Some(Ok(Tab)) => match self.iter.next() {
-                Some(Ok(Space)) => Ok(syntax::WBJumpIfZero(try!(self.parse_label()))),
-                Some(Ok(Tab)) => Ok(syntax::WBJumpIfNegative(try!(self.parse_label()))),
-                Some(Ok(LF)) => Ok(syntax::WBReturn),
+                Some(Ok(Space)) => Ok(ir::WBJumpIfZero(try!(self.parse_label()))),
+                Some(Ok(Tab)) => Ok(ir::WBJumpIfNegative(try!(self.parse_label()))),
+                Some(Ok(LF)) => Ok(ir::WBReturn),
                 Some(Err(e)) => Err(e),
                 None => Err(unknown_instruction("NT")),
             },
             Some(Ok(LF)) => match self.iter.next() {
-                Some(Ok(LF)) => Ok(syntax::WBExit),
+                Some(Ok(LF)) => Ok(ir::WBExit),
                 Some(Ok(Space)) => Err(unknown_instruction("NNS")),
                 Some(Ok(Tab)) => Err(unknown_instruction("NNT")),
                 Some(Err(e)) => Err(e),
@@ -253,15 +254,15 @@ impl<I: Iterator<IoResult<Token>>> Parser<I> {
     fn parse_io(&mut self) -> IoResult<Instruction> {
         match self.iter.next() {
             Some(Ok(Space)) => match self.iter.next() {
-                Some(Ok(Space)) => Ok(syntax::WBPutCharactor),
-                Some(Ok(Tab)) => Ok(syntax::WBPutNumber),
+                Some(Ok(Space)) => Ok(ir::WBPutCharactor),
+                Some(Ok(Tab)) => Ok(ir::WBPutNumber),
                 Some(Ok(LF)) => Err(unknown_instruction("TNSN")),
                 Some(Err(e)) => Err(e),
                 None => Err(unknown_instruction("TNS")),
             },
             Some(Ok(Tab)) => match self.iter.next() {
-                Some(Ok(Space)) => Ok(syntax::WBGetCharactor),
-                Some(Ok(Tab)) => Ok(syntax::WBGetNumber),
+                Some(Ok(Space)) => Ok(ir::WBGetCharactor),
+                Some(Ok(Tab)) => Ok(ir::WBGetNumber),
                 Some(Ok(LF)) => Err(unknown_instruction("TNTN")),
                 Some(Err(e)) => Err(e),
                 None => Err(unknown_instruction("TNT")),
@@ -282,7 +283,7 @@ impl Whitespace {
 }
 
 impl Compiler for Whitespace {
-    fn parse<B: Buffer>(&self, input: &mut B, output: &mut AST) -> IoResult<()> {
+    fn parse<B: Buffer>(&self, input: &mut B, output: &mut Vec<Instruction>) -> IoResult<()> {
         Parser::new(Tokens { iter: Scan { buffer: input } }).parse(output)
     }
 }
@@ -293,30 +294,30 @@ impl Decompiler for Whitespace {
         try!(self.disassemble(input, &mut ast));
         for inst in ast.iter() {
             let ret = match inst {
-                &syntax::WBPush(n)              => write_num!(output, "  ", n),
-                &syntax::WBDuplicate            => write!(output, " \n "),
-                &syntax::WBCopy(n)              => write_num!(output, " \t ", n),
-                &syntax::WBSwap                 => write!(output, " \n\t"),
-                &syntax::WBDiscard              => write!(output, " \n\n"),
-                &syntax::WBSlide(n)             => write_num!(output, " \t\n", n),
-                &syntax::WBAddition             => write!(output, "\t   "),
-                &syntax::WBSubtraction          => write!(output, "\t  \t"),
-                &syntax::WBMultiplication       => write!(output, "\t  \n"),
-                &syntax::WBDivision             => write!(output, "\t \t "),
-                &syntax::WBModulo               => write!(output, "\t \t\t"),
-                &syntax::WBStore                => write!(output, "\t\t "),
-                &syntax::WBRetrieve             => write!(output, "\t\t\t"),
-                &syntax::WBMark(n)              => write_num!(output, "\n  ", n),
-                &syntax::WBCall(n)              => write_num!(output, "\n \t", n),
-                &syntax::WBJump(n)              => write_num!(output, "\n \n", n),
-                &syntax::WBJumpIfZero(n)        => write_num!(output, "\n\t ", n),
-                &syntax::WBJumpIfNegative(n)    => write_num!(output, "\n\t\t", n),
-                &syntax::WBReturn               => write!(output, "\n\t\n"),
-                &syntax::WBExit                 => write!(output, "\n\n\n"),
-                &syntax::WBPutCharactor         => write!(output, "\t\n  "),
-                &syntax::WBPutNumber            => write!(output, "\t\n \t"),
-                &syntax::WBGetCharactor         => write!(output, "\t\n\t "),
-                &syntax::WBGetNumber            => write!(output, "\t\n\t\t"),
+                &ir::WBPush(n)              => write_num!(output, "  ", n),
+                &ir::WBDuplicate            => write!(output, " \n "),
+                &ir::WBCopy(n)              => write_num!(output, " \t ", n),
+                &ir::WBSwap                 => write!(output, " \n\t"),
+                &ir::WBDiscard              => write!(output, " \n\n"),
+                &ir::WBSlide(n)             => write_num!(output, " \t\n", n),
+                &ir::WBAddition             => write!(output, "\t   "),
+                &ir::WBSubtraction          => write!(output, "\t  \t"),
+                &ir::WBMultiplication       => write!(output, "\t  \n"),
+                &ir::WBDivision             => write!(output, "\t \t "),
+                &ir::WBModulo               => write!(output, "\t \t\t"),
+                &ir::WBStore                => write!(output, "\t\t "),
+                &ir::WBRetrieve             => write!(output, "\t\t\t"),
+                &ir::WBMark(n)              => write_num!(output, "\n  ", n),
+                &ir::WBCall(n)              => write_num!(output, "\n \t", n),
+                &ir::WBJump(n)              => write_num!(output, "\n \n", n),
+                &ir::WBJumpIfZero(n)        => write_num!(output, "\n\t ", n),
+                &ir::WBJumpIfNegative(n)    => write_num!(output, "\n\t\t", n),
+                &ir::WBReturn               => write!(output, "\n\t\n"),
+                &ir::WBExit                 => write!(output, "\n\n\n"),
+                &ir::WBPutCharactor         => write!(output, "\t\n  "),
+                &ir::WBPutNumber            => write!(output, "\t\n \t"),
+                &ir::WBGetCharactor         => write!(output, "\t\n\t "),
+                &ir::WBGetNumber            => write!(output, "\t\n\t\t"),
             };
             match ret {
                 Err(e) => return Err(e),
@@ -333,6 +334,7 @@ mod test {
     use std::str::from_utf8;
     use super::*;
     use bytecode::ByteCodeWriter;
+    use ir::*;
     use syntax::*;
 
     use std::io::BufReader;
@@ -368,7 +370,7 @@ mod test {
             " \t\n \t\n",   // SLIDE 1
             ).concat();
         let syntax = Whitespace::new();
-        let mut ast: AST = vec!();
+        let mut ast: Vec<Instruction> = vec!();
         syntax.parse_str(source.as_slice(), &mut ast).unwrap();
         assert_eq!(ast.shift(), Some(WBPush(1)));
         assert_eq!(ast.shift(), Some(WBDuplicate));
@@ -389,7 +391,7 @@ mod test {
             "\t \t\t",  // MOD
             ).concat();
         let syntax = Whitespace::new();
-        let mut ast: AST = vec!();
+        let mut ast: Vec<Instruction> = vec!();
         syntax.parse_str(source.as_slice(), &mut ast).unwrap();
         assert_eq!(ast.shift(), Some(WBAddition));
         assert_eq!(ast.shift(), Some(WBSubtraction));
@@ -406,7 +408,7 @@ mod test {
             "\t\t\t",   // RETRIEVE
             ).concat();
         let syntax = Whitespace::new();
-        let mut ast: AST = vec!();
+        let mut ast: Vec<Instruction> = vec!();
         syntax.parse_str(source.as_slice(), &mut ast).unwrap();
         assert_eq!(ast.shift(), Some(WBStore));
         assert_eq!(ast.shift(), Some(WBRetrieve));
@@ -425,7 +427,7 @@ mod test {
             "\n\n\n",       // EXIT
             ).concat();
         let syntax = Whitespace::new();
-        let mut ast: AST = vec!();
+        let mut ast: Vec<Instruction> = vec!();
         syntax.parse_str(source.as_slice(), &mut ast).unwrap();
         assert_eq!(ast.shift(), Some(WBMark(1)));
         assert_eq!(ast.shift(), Some(WBCall(2)));
@@ -446,7 +448,7 @@ mod test {
             "\t\n\t\t", // GETN
             ).concat();
         let syntax = Whitespace::new();
-        let mut ast: AST = vec!();
+        let mut ast: Vec<Instruction> = vec!();
         syntax.parse_str(source.as_slice(), &mut ast).unwrap();
         assert_eq!(ast.shift(), Some(WBPutCharactor));
         assert_eq!(ast.shift(), Some(WBPutNumber));

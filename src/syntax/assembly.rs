@@ -5,8 +5,9 @@ use std::io::{EndOfFile, InvalidInput, IoError, IoResult, standard_error};
 use std::iter::{Counter, count};
 
 use bytecode::ByteCodeReader;
-use syntax;
-use syntax::{AST, Compiler, Decompiler};
+use ir;
+use ir::Instruction;
+use syntax::{Compiler, Decompiler};
 
 macro_rules! try_number(
     ($val:expr) => (match from_str($val) {
@@ -39,7 +40,7 @@ impl Assembly {
 }
 
 impl Compiler for Assembly {
-    fn parse<B: Buffer>(&self, input: &mut B, output: &mut AST) -> IoResult<()> {
+    fn parse<B: Buffer>(&self, input: &mut B, output: &mut Vec<Instruction>) -> IoResult<()> {
         let mut labels = HashMap::new();
         let mut counter = count(1, 1);
         loop {
@@ -54,30 +55,30 @@ impl Compiler for Assembly {
                         None => (slice, ""),
                     };
                     match mnemonic {
-                        "PUSH"     => Ok(syntax::WBPush(try_number!(val))),
-                        "DUP"      => Ok(syntax::WBDuplicate),
-                        "COPY"     => Ok(syntax::WBCopy(try_number!(val))),
-                        "SWAP"     => Ok(syntax::WBSwap),
-                        "DISCARD"  => Ok(syntax::WBDiscard),
-                        "SLIDE"    => Ok(syntax::WBSlide(try_number!(val))),
-                        "ADD"      => Ok(syntax::WBAddition),
-                        "SUB"      => Ok(syntax::WBSubtraction),
-                        "MUL"      => Ok(syntax::WBMultiplication),
-                        "DIV"      => Ok(syntax::WBDivision),
-                        "MOD"      => Ok(syntax::WBModulo),
-                        "STORE"    => Ok(syntax::WBStore),
-                        "RETRIEVE" => Ok(syntax::WBRetrieve),
-                        "MARK"     => Ok(syntax::WBMark(self.marker(val.to_string(), &mut labels, &mut counter))),
-                        "CALL"     => Ok(syntax::WBCall(self.marker(val.to_string(), &mut labels, &mut counter))),
-                        "JUMP"     => Ok(syntax::WBJump(self.marker(val.to_string(), &mut labels, &mut counter))),
-                        "JUMPZ"    => Ok(syntax::WBJumpIfZero(self.marker(val.to_string(), &mut labels, &mut counter))),
-                        "JUMPN"    => Ok(syntax::WBJumpIfNegative(self.marker(val.to_string(), &mut labels, &mut counter))),
-                        "RETURN"   => Ok(syntax::WBReturn),
-                        "EXIT"     => Ok(syntax::WBExit),
-                        "PUTC"     => Ok(syntax::WBPutCharactor),
-                        "PUTN"     => Ok(syntax::WBPutNumber),
-                        "GETC"     => Ok(syntax::WBGetCharactor),
-                        "GETN"     => Ok(syntax::WBGetNumber),
+                        "PUSH"     => Ok(ir::WBPush(try_number!(val))),
+                        "DUP"      => Ok(ir::WBDuplicate),
+                        "COPY"     => Ok(ir::WBCopy(try_number!(val))),
+                        "SWAP"     => Ok(ir::WBSwap),
+                        "DISCARD"  => Ok(ir::WBDiscard),
+                        "SLIDE"    => Ok(ir::WBSlide(try_number!(val))),
+                        "ADD"      => Ok(ir::WBAddition),
+                        "SUB"      => Ok(ir::WBSubtraction),
+                        "MUL"      => Ok(ir::WBMultiplication),
+                        "DIV"      => Ok(ir::WBDivision),
+                        "MOD"      => Ok(ir::WBModulo),
+                        "STORE"    => Ok(ir::WBStore),
+                        "RETRIEVE" => Ok(ir::WBRetrieve),
+                        "MARK"     => Ok(ir::WBMark(self.marker(val.to_string(), &mut labels, &mut counter))),
+                        "CALL"     => Ok(ir::WBCall(self.marker(val.to_string(), &mut labels, &mut counter))),
+                        "JUMP"     => Ok(ir::WBJump(self.marker(val.to_string(), &mut labels, &mut counter))),
+                        "JUMPZ"    => Ok(ir::WBJumpIfZero(self.marker(val.to_string(), &mut labels, &mut counter))),
+                        "JUMPN"    => Ok(ir::WBJumpIfNegative(self.marker(val.to_string(), &mut labels, &mut counter))),
+                        "RETURN"   => Ok(ir::WBReturn),
+                        "EXIT"     => Ok(ir::WBExit),
+                        "PUTC"     => Ok(ir::WBPutCharactor),
+                        "PUTN"     => Ok(ir::WBPutNumber),
+                        "GETC"     => Ok(ir::WBGetCharactor),
+                        "GETN"     => Ok(ir::WBGetNumber),
                         _          => Err(standard_error(InvalidInput)),
                     }
                 },
@@ -99,30 +100,30 @@ impl Decompiler for Assembly {
         try!(self.disassemble(input, &mut ast));
         for inst in ast.iter() {
             let res = match inst {
-                &syntax::WBPush(n)              => write!(output, "PUSH {}\n", n),
-                &syntax::WBDuplicate            => output.write_line("DUP"),
-                &syntax::WBCopy(n)              => write!(output, "COPY {}\n", n),
-                &syntax::WBSwap                 => output.write_line("SWAP"),
-                &syntax::WBDiscard              => output.write_line("DISCARD"),
-                &syntax::WBSlide(n)             => write!(output, "SLIDE {}\n", n),
-                &syntax::WBAddition             => output.write_line("ADD"),
-                &syntax::WBSubtraction          => output.write_line("SUB"),
-                &syntax::WBMultiplication       => output.write_line("MUL"),
-                &syntax::WBDivision             => output.write_line("DIV"),
-                &syntax::WBModulo               => output.write_line("MOD"),
-                &syntax::WBStore                => output.write_line("STORE"),
-                &syntax::WBRetrieve             => output.write_line("RETRIEVE"),
-                &syntax::WBMark(n)              => write!(output, "MARK {:X}\n", n),
-                &syntax::WBCall(n)              => write!(output, "CALL {:X}\n", n),
-                &syntax::WBJump(n)              => write!(output, "JUMP {:X}\n", n),
-                &syntax::WBJumpIfZero(n)        => write!(output, "JUMPZ {:X}\n", n),
-                &syntax::WBJumpIfNegative(n)    => write!(output, "JUMPN {:X}\n", n),
-                &syntax::WBReturn               => output.write_line("RETURN"),
-                &syntax::WBExit                 => output.write_line("EXIT"),
-                &syntax::WBPutCharactor         => output.write_line("PUTC"),
-                &syntax::WBPutNumber            => output.write_line("PUTN"),
-                &syntax::WBGetCharactor         => output.write_line("GETC"),
-                &syntax::WBGetNumber            => output.write_line("GETN"),
+                &ir::WBPush(n)              => write!(output, "PUSH {}\n", n),
+                &ir::WBDuplicate            => output.write_line("DUP"),
+                &ir::WBCopy(n)              => write!(output, "COPY {}\n", n),
+                &ir::WBSwap                 => output.write_line("SWAP"),
+                &ir::WBDiscard              => output.write_line("DISCARD"),
+                &ir::WBSlide(n)             => write!(output, "SLIDE {}\n", n),
+                &ir::WBAddition             => output.write_line("ADD"),
+                &ir::WBSubtraction          => output.write_line("SUB"),
+                &ir::WBMultiplication       => output.write_line("MUL"),
+                &ir::WBDivision             => output.write_line("DIV"),
+                &ir::WBModulo               => output.write_line("MOD"),
+                &ir::WBStore                => output.write_line("STORE"),
+                &ir::WBRetrieve             => output.write_line("RETRIEVE"),
+                &ir::WBMark(n)              => write!(output, "MARK {:X}\n", n),
+                &ir::WBCall(n)              => write!(output, "CALL {:X}\n", n),
+                &ir::WBJump(n)              => write!(output, "JUMP {:X}\n", n),
+                &ir::WBJumpIfZero(n)        => write!(output, "JUMPZ {:X}\n", n),
+                &ir::WBJumpIfNegative(n)    => write!(output, "JUMPN {:X}\n", n),
+                &ir::WBReturn               => output.write_line("RETURN"),
+                &ir::WBExit                 => output.write_line("EXIT"),
+                &ir::WBPutCharactor         => output.write_line("PUTC"),
+                &ir::WBPutNumber            => output.write_line("PUTN"),
+                &ir::WBGetCharactor         => output.write_line("GETC"),
+                &ir::WBGetNumber            => output.write_line("GETN"),
             };
             match res {
                 Err(ref e) if e.kind == EndOfFile => break,
@@ -139,6 +140,7 @@ mod test {
     use std::io::{MemReader, MemWriter};
     use std::str::from_utf8;
     use super::*;
+    use ir::*;
     use bytecode::ByteCodeWriter;
     use syntax::*;
 
@@ -153,7 +155,7 @@ mod test {
             "SLIDE 1000",
             ).connect("\n");
         let syntax = Assembly::new();
-        let mut ast: AST = vec!();
+        let mut ast: Vec<Instruction> = vec!();
         syntax.parse_str(source.as_slice(), &mut ast).unwrap();
         assert_eq!(ast.shift(), Some(WBPush(1)));
         assert_eq!(ast.shift(), Some(WBDuplicate));
@@ -174,7 +176,7 @@ mod test {
             "MOD",
             ).connect("\n");
         let syntax = Assembly::new();
-        let mut ast: AST = vec!();
+        let mut ast: Vec<Instruction> = vec!();
         syntax.parse_str(source.as_slice(), &mut ast).unwrap();
         assert_eq!(ast.shift(), Some(WBAddition));
         assert_eq!(ast.shift(), Some(WBSubtraction));
@@ -191,7 +193,7 @@ mod test {
             "RETRIEVE",
             ).connect("\n");
         let syntax = Assembly::new();
-        let mut ast: AST = vec!();
+        let mut ast: Vec<Instruction> = vec!();
         syntax.parse_str(source.as_slice(), &mut ast).unwrap();
         assert_eq!(ast.shift(), Some(WBStore));
         assert_eq!(ast.shift(), Some(WBRetrieve));
@@ -210,7 +212,7 @@ mod test {
             "EXIT",
             ).connect("\n");
         let syntax = Assembly::new();
-        let mut ast: AST = vec!();
+        let mut ast: Vec<Instruction> = vec!();
         syntax.parse_str(source.as_slice(), &mut ast).unwrap();
         assert_eq!(ast.shift(), Some(WBMark(1)));
         assert_eq!(ast.shift(), Some(WBCall(2)));
@@ -231,7 +233,7 @@ mod test {
             "GETN",
             ).connect("\n");
         let syntax = Assembly::new();
-        let mut ast: AST = vec!();
+        let mut ast: Vec<Instruction> = vec!();
         syntax.parse_str(source.as_slice(), &mut ast).unwrap();
         assert_eq!(ast.shift(), Some(WBPutCharactor));
         assert_eq!(ast.shift(), Some(WBPutNumber));
