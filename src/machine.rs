@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::collections::TreeMap;
-use std::io::{BufferedReader, EndOfFile, InvalidInput, IoError, MemReader, MemWriter, SeekSet, standard_error};
-use std::io::stdio::{StdReader, StdWriter, stdin, stdout_raw};
+use std::io::{EndOfFile, InvalidInput, IoError, MemReader, MemWriter, SeekSet, standard_error};
 use bc = bytecode;
 use bytecode::ByteCodeReader;
 use syntax::Syntax;
@@ -19,20 +18,20 @@ pub enum MachineError {
     OtherMachineError,
 }
 
-pub struct Machine {
+pub struct Machine<B, W> {
     stack: Vec<i64>,
     heap: TreeMap<i64, i64>,
-    stdin: BufferedReader<StdReader>,
-    stdout: StdWriter,
+    stdin: B,
+    stdout: W,
 }
 
-impl Machine {
-    pub fn new() -> Machine {
+impl<B: Buffer, W: Writer> Machine<B, W> {
+    pub fn new(stdin: B, stdout: W) -> Machine<B, W> {
         Machine {
             stack: Vec::new(),
             heap: TreeMap::new(),
-            stdin: stdin(),
-            stdout: stdout_raw(),
+            stdin: stdin,
+            stdout: stdout,
         }
     }
 
@@ -297,18 +296,24 @@ impl Machine {
     }
 }
 
-pub trait Interpreter<S> {
-    fn run<B: Buffer>(&self, &mut B) -> MachineResult<()>;
+pub struct Interpreter<B, W, S> {
+    stdin: B,
+    stdout: W,
+    syntax: S,
 }
 
-impl<S: Syntax> Interpreter<S> for S {
-    fn run<B: Buffer>(&self, buffer: &mut B) -> MachineResult<()> {
+impl<B: Buffer, W: Writer, S: Syntax> Interpreter<B, W, S> {
+    pub fn new(stdin: B, stdout: W, syntax: S) -> Interpreter<B, W, S> {
+        Interpreter { stdin: stdin, stdout: stdout, syntax: syntax }
+    }
+
+    pub fn run<B: Buffer>(self, buffer: &mut B) -> MachineResult<()> {
         let mut writer = MemWriter::new();
-        match self.compile(buffer, &mut writer) {
+        match self.syntax.compile(buffer, &mut writer) {
             Err(e) => Err(MachineIoError(e)),
             _ => {
                 let mut reader = MemReader::new(writer.unwrap());
-                let mut machine = Machine::new();
+                let mut machine = Machine::new(self.stdin, self.stdout);
                 match machine.run(&mut reader) {
                     Err(e) => Err(e),
                     _ => Ok(()),
@@ -321,7 +326,8 @@ impl<S: Syntax> Interpreter<S> for S {
 #[cfg(test)]
 mod test {
     use std::collections::HashMap;
-    use std::io::{MemReader, MemWriter};
+    use std::io::{BufWriter, MemReader, MemWriter};
+    use std::io::util::{NullReader, NullWriter};
     use super::*;
     use bytecode::ByteCodeWriter;
 
@@ -336,7 +342,7 @@ mod test {
         bcw.write_slide(1).unwrap();
 
         let mut bcr = MemReader::new(bcw.unwrap());
-        let mut vm = Machine::new();
+        let mut vm = Machine::new(NullReader, NullWriter);
         let mut caller = vec!();
         let mut index = HashMap::new();
         vm.step(&mut bcr, &mut index, &mut caller).unwrap();
@@ -364,7 +370,7 @@ mod test {
         bcw.write_mod().unwrap();
 
         let mut bcr = MemReader::new(bcw.unwrap());
-        let mut vm = Machine::new();
+        let mut vm = Machine::new(NullReader, NullWriter);
         let mut caller = vec!();
         let mut index = HashMap::new();
         vm.stack.push_all([2, 19, 2, 5, 1, 1]);
@@ -388,7 +394,7 @@ mod test {
         bcw.write_retrieve().unwrap();
 
         let mut bcr = MemReader::new(bcw.unwrap());
-        let mut vm = Machine::new();
+        let mut vm = Machine::new(NullReader, NullWriter);
         let mut caller = vec!();
         let mut index = HashMap::new();
         vm.stack.push_all([1, 1, 2]);
@@ -415,7 +421,7 @@ mod test {
         bcw.write_return().unwrap();
 
         let mut bcr = MemReader::new(bcw.unwrap());
-        let mut vm = Machine::new();
+        let mut vm = Machine::new(NullReader, NullWriter);
         let mut caller = vec!();
         let mut index = HashMap::new();
         vm.stack.push_all([-1, 0]);
@@ -432,4 +438,36 @@ mod test {
         assert_eq!(caller.len(), 0);
         assert_eq!(vm.step(&mut bcr, &mut index, &mut caller), Ok(false));
     }
+
+    #[test]
+    fn test_io() {
+        let mut heap = [0, 0];
+        let mut buf  = [0, ..2];
+        {
+            let mut bcw = MemWriter::new();
+            bcw.write_getc().unwrap();
+            bcw.write_getn().unwrap();
+            bcw.write_putc().unwrap();
+            bcw.write_putn().unwrap();
+            let mut bcr = MemReader::new(bcw.unwrap());
+            let input = MemReader::new(vec!(87, 49, 50, 51, 10));
+            let output = BufWriter::new(buf);
+            let mut vm = Machine::new(input, output);
+            let mut caller = vec!();
+            let mut index = HashMap::new();
+            vm.stack.push_all([5, 66, 2, 1]);
+            vm.step(&mut bcr, &mut index, &mut caller).unwrap();
+            vm.step(&mut bcr, &mut index, &mut caller).unwrap();
+            vm.step(&mut bcr, &mut index, &mut caller).unwrap();
+            vm.step(&mut bcr, &mut index, &mut caller).unwrap();
+            assert!(vm.step(&mut bcr, &mut index, &mut caller).is_err());
+
+            heap[0] = *vm.heap.find(&1).unwrap();
+            heap[1] = *vm.heap.find(&2).unwrap();
+        }
+        assert!(heap == [87, 123]);
+        assert!(buf == [66, 53]);
+    }
+
+
 }

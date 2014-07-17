@@ -1,6 +1,6 @@
 use std::collections::HashMap;
-use std::io::{BufReader, EndOfFile, InvalidInput, IoResult, IoError};
-use std::iter::count;
+use std::io::{BufReader, EndOfFile, InvalidInput, IoResult, IoError, standard_error};
+use std::iter::{Counter, count};
 
 use bytecode::ByteCodeReader;
 use syntax;
@@ -8,10 +8,6 @@ use syntax::{AST, Syntax};
 
 pub static BF_FAIL_MARKER: i64 = -1;
 pub static BF_PTR_ADDR: i64 = -1;
-
-pub trait BrainfuckSyntax {
-    fn map<B: Buffer>(&self, &mut B, |Token| -> IoResult<()>) -> IoResult<()>;
-}
 
 #[deriving(PartialEq, Show)]
 pub enum Token {
@@ -25,28 +21,87 @@ pub enum Token {
     LoopEnd,
 }
 
-pub struct Wrapper<T> {
-    inner: T
+struct Scan<'r, T> {
+    buffer: &'r mut T
 }
 
-impl<S: BrainfuckSyntax> Wrapper<S> {
-    pub fn new(inner: S) -> Wrapper<S> { Wrapper { inner: inner } }
+impl<'r, B: Buffer> Iterator<IoResult<char>> for Scan<'r, B> {
+    fn next(&mut self) -> Option<IoResult<char>> {
+        loop {
+            let ret = match self.buffer.read_char() {
+                Ok('>') => '>',
+                Ok('<') => '<',
+                Ok('+') => '+',
+                Ok('-') => '-',
+                Ok(',') => ',',
+                Ok('.') => '.',
+                Ok('[') => '[',
+                Ok(']') => ']',
+                Ok(_)   => continue,
+                Err(IoError { kind: EndOfFile, ..}) => return None,
+                Err(e) => return Some(Err(e)),
+            };
+            return Some(Ok(ret));
+        }
+    }
 }
 
-impl<S: BrainfuckSyntax> Syntax for Wrapper<S> {
-    fn parse_str<'a>(&self, input: &'a str, output: &mut AST) -> IoResult<()> {
-        self.parse(&mut BufReader::new(input.as_bytes()), output)
+struct Tokens<T> {
+    iter: T,
+}
+
+impl<I: Iterator<IoResult<char>>> Iterator<IoResult<Token>> for Tokens<I> {
+    fn next(&mut self) -> Option<IoResult<Token>> {
+        let c = self.iter.next();
+        if c.is_none() { return None; }
+
+        Some(match c.unwrap() {
+            Ok('>') => Ok(MoveRight),
+            Ok('<') => Ok(MoveLeft),
+            Ok('+') => Ok(Increment),
+            Ok('-') => Ok(Decrement),
+            Ok(',') => Ok(Get),
+            Ok('.') => Ok(Put),
+            Ok('[') => Ok(LoopStart),
+            Ok(']') => Ok(LoopEnd),
+            Ok(_)   => Err(standard_error(InvalidInput)),
+            Err(e)  => Err(e),
+        })
+    }
+}
+
+pub struct Parser<T> {
+    iter: T,
+    stack: Vec<i64>,
+    lcount: Counter<i64>,
+}
+
+impl<I: Iterator<IoResult<Token>>> Parser<I> {
+    pub fn new(iter: I) -> Parser<I> {
+        Parser {
+            iter: iter,
+            stack: Vec::new(),
+            lcount: count(1, 1),
+        }
     }
 
-    fn parse<B: Buffer>(&self, input: &mut B, output: &mut AST) -> IoResult<()> {
+    pub fn parse(&mut self, output: &mut AST) -> IoResult<()> {
         let mut labels = HashMap::new();
-        let mut label_counter = count(1, 1);
-        let mut loop_counter = count(1, 1);
-        let mut loop_stack = Vec::new();
+        let mut count = count(1, 1);
+        let marker = |label: String| -> i64 {
+            match labels.find_copy(&label) {
+                Some(val) => val,
+                None => {
+                    let val = count.next().unwrap();
+                    labels.insert(label, val);
+                    val
+                },
+            }
+        };
 
-        try!(self.inner.map(input, |token| -> IoResult<()> {
+        for token in self.iter {
             match token {
-                MoveRight => {
+                Ok(MoveRight) => {
                     output.push(syntax::WBPush(BF_PTR_ADDR));
                     output.push(syntax::WBDuplicate);
                     output.push(syntax::WBRetrieve);
@@ -54,7 +109,7 @@ impl<S: BrainfuckSyntax> Syntax for Wrapper<S> {
                     output.push(syntax::WBAddition);
                     output.push(syntax::WBStore);
                 },
-                MoveLeft => {
+                Ok(MoveLeft) => {
                     output.push(syntax::WBPush(BF_PTR_ADDR));
                     output.push(syntax::WBDuplicate);
                     output.push(syntax::WBRetrieve);
@@ -64,7 +119,7 @@ impl<S: BrainfuckSyntax> Syntax for Wrapper<S> {
                     output.push(syntax::WBJumpIfNegative(BF_FAIL_MARKER));
                     output.push(syntax::WBStore);
                 },
-                Increment => {
+                Ok(Increment) => {
                     output.push(syntax::WBPush(BF_PTR_ADDR));
                     output.push(syntax::WBRetrieve);
                     output.push(syntax::WBDuplicate);
@@ -73,7 +128,7 @@ impl<S: BrainfuckSyntax> Syntax for Wrapper<S> {
                     output.push(syntax::WBAddition);
                     output.push(syntax::WBStore);
                 },
-                Decrement => {
+                Ok(Decrement) => {
                     output.push(syntax::WBPush(BF_PTR_ADDR));
                     output.push(syntax::WBRetrieve);
                     output.push(syntax::WBDuplicate);
@@ -82,32 +137,32 @@ impl<S: BrainfuckSyntax> Syntax for Wrapper<S> {
                     output.push(syntax::WBSubtraction);
                     output.push(syntax::WBStore);
                 },
-                Get => {
+                Ok(Get) => {
                     output.push(syntax::WBPush(BF_PTR_ADDR));
                     output.push(syntax::WBRetrieve);
                     output.push(syntax::WBRetrieve);
                     output.push(syntax::WBGetCharactor);
                 },
-                Put => {
+                Ok(Put) => {
                     output.push(syntax::WBPush(BF_PTR_ADDR));
                     output.push(syntax::WBRetrieve);
                     output.push(syntax::WBRetrieve);
                     output.push(syntax::WBPutCharactor);
                 },
-                LoopStart => {
-                    let l: i64 = loop_counter.next().unwrap();
-                    loop_stack.push(l);
-                    output.push(syntax::WBMark(self.marker(format!("{}#", l), &mut labels, &mut label_counter)));
+                Ok(LoopStart) => {
+                    let l: i64 = self.lcount.next().unwrap();
+                    self.stack.push(l);
+                    output.push(syntax::WBMark(marker(format!("{}#", l))));
                     output.push(syntax::WBPush(BF_PTR_ADDR));
                     output.push(syntax::WBRetrieve);
                     output.push(syntax::WBRetrieve);
-                    output.push(syntax::WBJumpIfZero(self.marker(format!("#{}", l), &mut labels, &mut label_counter)));
+                    output.push(syntax::WBJumpIfZero(marker(format!("#{}", l))));
                 },
-                LoopEnd => {
-                    match loop_stack.pop() {
+                Ok(LoopEnd) => {
+                    match self.stack.pop() {
                         Some(l) => {
-                            output.push(syntax::WBJump(self.marker(format!("{}#", l), &mut labels, &mut label_counter)));
-                            output.push(syntax::WBMark(self.marker(format!("#{}", l), &mut labels, &mut label_counter)));
+                            output.push(syntax::WBJump(marker(format!("{}#", l))));
+                            output.push(syntax::WBMark(marker(format!("#{}", l))));
                         },
                         None => return Err(IoError {
                             kind: InvalidInput,
@@ -116,51 +171,73 @@ impl<S: BrainfuckSyntax> Syntax for Wrapper<S> {
                         }),
                     }
                 },
-            };
-            Ok(())
-        }));
+                Err(e) => return Err(e),
+            }
+        }
         output.push(syntax::WBExit);
         output.push(syntax::WBMark(BF_FAIL_MARKER));
-        Ok(())
-    }
 
-    #[allow(unused_variable)]
-    fn decompile<R: ByteCodeReader, W: Writer>(&self, input: &mut R, output: &mut W) -> IoResult<()> {
-        unimplemented!()
+        Ok(())
     }
 }
 
 pub struct Brainfuck;
 
 impl Brainfuck {
-    pub fn new() -> Wrapper<Brainfuck> { Wrapper::new(Brainfuck) }
+    pub fn new() -> Brainfuck { Brainfuck }
 }
 
-impl BrainfuckSyntax for Brainfuck {
-    fn map<B: Buffer>(&self, input: &mut B, block: |Token| -> IoResult<()>) -> IoResult<()> {
-        loop {
-            let ret = match input.read_char() {
-                Ok('>') => MoveRight,
-                Ok('<') => MoveLeft,
-                Ok('+') => Increment,
-                Ok('-') => Decrement,
-                Ok(',') => Get,
-                Ok('.') => Put,
-                Ok('[') => LoopStart,
-                Ok(']') => LoopEnd,
-                Ok(_)   => continue,
-                Err(IoError { kind: EndOfFile, ..}) => return Ok(()),
-                Err(e) => return Err(e),
-            };
-            try!(block(ret))
-        }
+impl Syntax for Brainfuck {
+    fn parse_str<'a>(&self, input: &'a str, output: &mut AST) -> IoResult<()> {
+        self.parse(&mut BufReader::new(input.as_bytes()), output)
     }
+
+    fn parse<B: Buffer>(&self, input: &mut B, output: &mut AST) -> IoResult<()> {
+        Parser::new(Tokens { iter: Scan { buffer: input } }).parse(output)
+    }
+
+    #[allow(unused_variable)]
+    fn decompile<R: ByteCodeReader, W: Writer>(&self, input: &mut R, output: &mut W) -> IoResult<()> {
+        unimplemented!()
+    }
+
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
     use syntax::*;
+    use std::io::BufReader;
+
+    #[test]
+    fn test_scan() {
+        let mut buffer = BufReader::new("><+- ,.\n[饂飩]".as_bytes());
+        let mut it = super::Scan { buffer: &mut buffer };
+        assert_eq!(it.next(), Some(Ok('>')));
+        assert_eq!(it.next(), Some(Ok('<')));
+        assert_eq!(it.next(), Some(Ok('+')));
+        assert_eq!(it.next(), Some(Ok('-')));
+        assert_eq!(it.next(), Some(Ok(',')));
+        assert_eq!(it.next(), Some(Ok('.')));
+        assert_eq!(it.next(), Some(Ok('[')));
+        assert_eq!(it.next(), Some(Ok(']')));
+        assert!(it.next().is_none());
+    }
+
+    #[test]
+    fn test_tokenize() {
+        let mut buffer = BufReader::new("><+- ,.\n[饂飩]".as_bytes());
+        let mut it = super::Tokens { iter: super::Scan { buffer: &mut buffer } };
+        assert_eq!(it.next(), Some(Ok(MoveRight)));
+        assert_eq!(it.next(), Some(Ok(MoveLeft)));
+        assert_eq!(it.next(), Some(Ok(Increment)));
+        assert_eq!(it.next(), Some(Ok(Decrement)));
+        assert_eq!(it.next(), Some(Ok(Get)));
+        assert_eq!(it.next(), Some(Ok(Put)));
+        assert_eq!(it.next(), Some(Ok(LoopStart)));
+        assert_eq!(it.next(), Some(Ok(LoopEnd)));
+        assert!(it.next().is_none());
+    }
 
     #[test]
     fn test_ptr() {

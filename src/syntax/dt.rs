@@ -1,89 +1,126 @@
-use std::io::{InvalidInput, IoResult, standard_error};
+use std::io::{BufReader, EndOfFile, InvalidInput, IoError, IoResult, standard_error};
 
 use bytecode::ByteCodeReader;
 use syntax;
 use syntax::{AST, Syntax};
-use syntax::whitespace::Whitespace;
-
-macro_rules! dt_write (
-    ($w:expr, $inst:expr) => ( write!($w, "{}", ($inst).concat()) )
-)
-
-macro_rules! dt_write_num (
-    ($w:expr, $cmd:expr, $n:expr) => (
-        write!($w, "{}{}{}", ($cmd).concat(),
-               (if $n < 0 {
-                   format!("{}{:t}", T, $n*-1)
-               } else {
-                   format!("{}{:t}", S, $n)
-               }).replace("0", S).replace("1", T),
-               N
-        )
-    )
-)
-
+use syntax::whitespace::{Parser, Token, Space, Tab, LF};
 
 static S: &'static str = "ど";
 static T: &'static str = "童貞ちゃうわっ！";
 static N: &'static str = "…";
 
+struct Scan<'r, T> {
+    buffer: &'r mut T
+}
+
+impl<'r, B: Buffer> Iterator<IoResult<String>> for Scan<'r, B> {
+    fn next(&mut self) -> Option<IoResult<String>> {
+        'outer: loop {
+            match self.buffer.read_char() {
+                Ok(c) if c == S.char_at(0) => return Some(Ok(S.to_string())),
+                Ok(c) if c == N.char_at(0) => return Some(Ok(N.to_string())),
+                Ok(c) if c == T.char_at(0) => {
+                    for i in range(1u, 8) {
+                        match self.buffer.read_char() {
+                            Ok(c) => {
+                                if c != T.char_at(i*3) { continue 'outer; }
+                            },
+                            Err(e) => return Some(Err(e)),
+                        }
+                    }
+                    return Some(Ok(T.to_string()));
+                },
+                Ok(_) => continue,
+                Err(IoError { kind: EndOfFile, ..}) => return None,
+                Err(e) => return Some(Err(e)),
+            }
+        }
+    }
+}
+
+struct Tokens<T> {
+    iter: T
+}
+
+impl<I: Iterator<IoResult<String>>> Iterator<IoResult<Token>> for Tokens<I> {
+    fn next(&mut self) -> Option<IoResult<Token>> {
+        let op = self.iter.next();
+        if op.is_none() { return None; }
+
+        let res = op.unwrap();
+         match res {
+             Err(e) => return Some(Err(e)),
+             Ok(_) => (),
+        }
+
+        Some(match res.unwrap().as_slice() {
+            S => Ok(Space),
+            T => Ok(Tab),
+            N => Ok(LF),
+            _ => Err(standard_error(InvalidInput)),
+        })
+    }
+}
+
 pub struct DT;
 
 impl DT {
     pub fn new() -> DT { DT }
+
+    #[inline]
+    fn write<W: Writer>(&self, output: &mut W, inst: &[&'static str]) -> IoResult<()> {
+        write!(output, "{}", inst.concat())
+    }
+
+    #[inline]
+    fn write_num<W: Writer>(&self, output: &mut W, cmd: &[&'static str], n: i64) -> IoResult<()> {
+        let (flag, value) = if n < 0 { (T, n*-1) } else { (S, n) };
+        write!(output, "{}{}{}{}",
+               cmd.concat(),
+               flag,
+               format!("{:t}", value).replace("0", S).replace("1", T),
+               N)
+    }
 }
 
 impl Syntax for DT {
     fn parse_str<'a>(&self, input: &'a str, output: &mut AST) -> IoResult<()> {
-        let mut buffer = String::new();
-        for pos in regex!("ど|童貞ちゃうわっ！|…").find_iter(input) {
-            let (start, end) = pos;
-            match input.slice(start, end) {
-                S => buffer.push_char(' '),
-                T => buffer.push_char('\t'),
-                N => buffer.push_char('\n'),
-                _ => return Err(standard_error(InvalidInput)),
-            }
-        }
-        let ws = Whitespace::new();
-        ws.parse_str(buffer.as_slice(), output)
+        self.parse(&mut BufReader::new(input.as_bytes()), output)
     }
 
     fn parse<B: Buffer>(&self, input: &mut B, output: &mut AST) -> IoResult<()> {
-        let source = try!(input.read_to_string());
-        self.parse_str(source.as_slice(), output)
+        Parser::new(Tokens { iter: Scan { buffer: input } }).parse(output)
     }
 
-    #[allow(unused_variable)]
     fn decompile<R: ByteCodeReader, W: Writer>(&self, input: &mut R, output: &mut W) -> IoResult<()> {
         let mut ast = vec!();
         try!(self.disassemble(input, &mut ast));
         for inst in ast.iter() {
             let ret = match inst {
-                &syntax::WBPush(n)              => dt_write_num!(output, [S, S], n),
-                &syntax::WBDuplicate            => dt_write!(output, [S, N, S]),
-                &syntax::WBCopy(n)              => dt_write_num!(output, [S, T, S], n),
-                &syntax::WBSwap                 => dt_write!(output, [S, N, T]),
-                &syntax::WBDiscard              => dt_write!(output, [S, N, N]),
-                &syntax::WBSlide(n)             => dt_write_num!(output, [S, T, N], n),
-                &syntax::WBAddition             => dt_write!(output, [T, S, S, S]),
-                &syntax::WBSubtraction          => dt_write!(output, [T, S, S, T]),
-                &syntax::WBMultiplication       => dt_write!(output, [T, S, S, N]),
-                &syntax::WBDivision             => dt_write!(output, [T, S, T, S]),
-                &syntax::WBModulo               => dt_write!(output, [T, S, T, T]),
-                &syntax::WBStore                => dt_write!(output, [T, T, S]),
-                &syntax::WBRetrieve             => dt_write!(output, [T, T, T]),
-                &syntax::WBMark(n)              => dt_write_num!(output, [N, S, S], n),
-                &syntax::WBCall(n)              => dt_write_num!(output, [N, S, T], n),
-                &syntax::WBJump(n)              => dt_write_num!(output, [N, S, N], n),
-                &syntax::WBJumpIfZero(n)        => dt_write_num!(output, [N, T, S], n),
-                &syntax::WBJumpIfNegative(n)    => dt_write_num!(output, [N, T, T], n),
-                &syntax::WBReturn               => dt_write!(output, [N, T, N]),
-                &syntax::WBExit                 => dt_write!(output, [N, N, N]),
-                &syntax::WBPutCharactor         => dt_write!(output, [T, N, S, S]),
-                &syntax::WBPutNumber            => dt_write!(output, [T, N, S, T]),
-                &syntax::WBGetCharactor         => dt_write!(output, [T, N, T, S]),
-                &syntax::WBGetNumber            => dt_write!(output, [T, N, T, T]),
+                &syntax::WBPush(n)              => self.write_num(output, [S, S], n),
+                &syntax::WBDuplicate            => self.write(output, [S, N, S]),
+                &syntax::WBCopy(n)              => self.write_num(output, [S, T, S], n),
+                &syntax::WBSwap                 => self.write(output, [S, N, T]),
+                &syntax::WBDiscard              => self.write(output, [S, N, N]),
+                &syntax::WBSlide(n)             => self.write_num(output, [S, T, N], n),
+                &syntax::WBAddition             => self.write(output, [T, S, S, S]),
+                &syntax::WBSubtraction          => self.write(output, [T, S, S, T]),
+                &syntax::WBMultiplication       => self.write(output, [T, S, S, N]),
+                &syntax::WBDivision             => self.write(output, [T, S, T, S]),
+                &syntax::WBModulo               => self.write(output, [T, S, T, T]),
+                &syntax::WBStore                => self.write(output, [T, T, S]),
+                &syntax::WBRetrieve             => self.write(output, [T, T, T]),
+                &syntax::WBMark(n)              => self.write_num(output, [N, S, S], n),
+                &syntax::WBCall(n)              => self.write_num(output, [N, S, T], n),
+                &syntax::WBJump(n)              => self.write_num(output, [N, S, N], n),
+                &syntax::WBJumpIfZero(n)        => self.write_num(output, [N, T, S], n),
+                &syntax::WBJumpIfNegative(n)    => self.write_num(output, [N, T, T], n),
+                &syntax::WBReturn               => self.write(output, [N, T, N]),
+                &syntax::WBExit                 => self.write(output, [N, N, N]),
+                &syntax::WBPutCharactor         => self.write(output, [T, N, S, S]),
+                &syntax::WBPutNumber            => self.write(output, [T, N, S, T]),
+                &syntax::WBGetCharactor         => self.write(output, [T, N, T, S]),
+                &syntax::WBGetNumber            => self.write(output, [T, N, T, T]),
             };
             match ret {
                 Err(e) => return Err(e),
@@ -96,15 +133,40 @@ impl Syntax for DT {
 
 #[cfg(test)]
 mod test {
-    use std::io::{MemReader, MemWriter};
+    use std::io::{BufReader, MemReader, MemWriter};
     use std::str::from_utf8;
+
     use super::*;
-    use bytecode::ByteCodeWriter;
     use syntax::*;
+    use syntax::whitespace::*;
+
+    use bytecode::ByteCodeWriter;
 
     static S: &'static str = "ど";
     static T: &'static str = "童貞ちゃうわっ！";
     static N: &'static str = "…";
+
+    #[test]
+    fn test_scan() {
+        let source = vec!(S, "童貞饂飩ちゃうわっ！", T, "\n", N).concat();
+        let mut buffer = BufReader::new(source.as_slice().as_bytes());
+        let mut it = super::Scan { buffer: &mut buffer };
+        assert_eq!(it.next(), Some(Ok(S.to_string())));
+        assert_eq!(it.next(), Some(Ok(T.to_string())));
+        assert_eq!(it.next(), Some(Ok(N.to_string())));
+        assert!(it.next().is_none());
+    }
+
+    #[test]
+    fn test_tokenize() {
+        let source = vec!(S, "童貞饂飩ちゃうわっ！", T, "\n", N).concat();
+        let mut buffer = BufReader::new(source.as_slice().as_bytes());
+        let mut it = super::Tokens { iter: super::Scan { buffer: &mut buffer } };
+        assert_eq!(it.next(), Some(Ok(Space)));
+        assert_eq!(it.next(), Some(Ok(Tab)));
+        assert_eq!(it.next(), Some(Ok(LF)));
+        assert!(it.next().is_none());
+    }
 
     #[test]
     fn test_parse_stack() {
@@ -209,7 +271,7 @@ mod test {
         let mut writer = MemWriter::new();
         {
             let mut bcw = MemWriter::new();
-            bcw.write_push(1).unwrap();
+            bcw.write_push(-1).unwrap();
             bcw.write_dup().unwrap();
             bcw.write_copy(2).unwrap();
             bcw.write_swap().unwrap();
@@ -240,7 +302,7 @@ mod test {
         }
         let result = from_utf8(writer.get_ref()).unwrap();
         let expected = vec!(
-           "どどど童貞ちゃうわっ！…",
+           "どど童貞ちゃうわっ！童貞ちゃうわっ！…",
            "ど…ど",
            "ど童貞ちゃうわっ！どど童貞ちゃうわっ！ど…",
            "ど…童貞ちゃうわっ！",
