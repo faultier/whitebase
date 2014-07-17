@@ -1,19 +1,15 @@
 language: rust
 
 install:
-  - sh ./install-deps.sh
+  - curl http://www.rust-lang.org/rustup.sh | sudo sh -
 
 script:
-  - make
-  - make test -j4
+  - cargo build --verbose
+  - cargo test --verbose
+  - rustdoc --test src/lib.rs -L target
 
 env:
-  global:
-    - LD_LIBRARY_PATH=/usr/local/lib
-    - DYLD_LIBRARY_PATH=/usr/local/lib
-  matrix:
-    - BITS=32
-    - BITS=64
+  - LD_LIBRARY_PATH=/usr/local/lib
 
 os:
   - linux
