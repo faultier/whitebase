@@ -1,4 +1,5 @@
 # Whitebase
+[![Build Status](https://travis-ci.org/faultier/rust-whitebase.svg?branch=master)](https://travis-ci.org/faultier/rust-whitebase)
 
 This project provides infrastructure for implementing esolang.
 

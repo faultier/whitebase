@@ -6,7 +6,6 @@ install:
 script:
   - make
   - make test -j4
-  - make install DESTDIR=${PWD}/destdir
 
 env:
   global:
