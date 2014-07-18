@@ -80,7 +80,7 @@ impl<B: Buffer, W: Writer> Machine<B, W> {
             Ok((bytecode::CMD_MOD, _))        => { try!(self.dcalc(|x, y| { y % x })); Ok(true) },
             Ok((bytecode::CMD_STORE, _))      => { try!(self.store()); Ok(true) },
             Ok((bytecode::CMD_RETRIEVE, _))   => { try!(self.retrieve()); Ok(true) },
-            Ok((bytecode::CMD_MARK, _))       => Ok(true),
+            Ok((bytecode::CMD_MARK, n))       => { try!(self.mark(program, index, n)); Ok(true) },
             Ok((bytecode::CMD_CALL, n))       => { try!(self.call(program, index, caller, &n)); Ok(true) },
             Ok((bytecode::CMD_JUMP, n))       => { try!(self.jump(program, index, &n)); Ok(true) },
             Ok((bytecode::CMD_JUMPZ, n))      => { try!(self.jump_if(program, index, &n, |x| { x == 0 })); Ok(true) },
@@ -205,6 +205,16 @@ impl<B: Buffer, W: Writer> Machine<B, W> {
                 Ok(())
             },
             None => Err(IllegalStackManipulation),
+        }
+    }
+
+    fn mark(&mut self, program: &mut ByteCodeReader, index: &mut HashMap<i64, u64>, label: i64) -> MachineResult<()> {
+        match program.tell() {
+            Ok(pos) => {
+                index.insert(label, pos);
+                Ok(())
+            },
+            Err(err) => return Err(MachineIoError(err)),
         }
     }
 
