@@ -1,32 +1,32 @@
 //! Intermediate representations of instruction set.
 
-#![experimental]
+#![stable]
 
 #[allow(missing_doc)]
-#[deriving(PartialEq, Show, Clone)]
+#[deriving(PartialEq, Eq, Clone, Hash, Show)]
 pub enum Instruction {
-    WBPush(i64),
-    WBDuplicate,
-    WBCopy(i64),
-    WBSwap,
-    WBDiscard,
-    WBSlide(i64),
-    WBAddition,
-    WBSubtraction,
-    WBMultiplication,
-    WBDivision,
-    WBModulo,
-    WBStore,
-    WBRetrieve,
-    WBMark(i64),
-    WBCall(i64),
-    WBJump(i64),
-    WBJumpIfZero(i64),
-    WBJumpIfNegative(i64),
-    WBReturn,
-    WBExit,
-    WBPutCharactor,
-    WBPutNumber,
-    WBGetCharactor,
-    WBGetNumber,
+    StackPush(i64),
+    StackDuplicate,
+    StackCopy(i64),
+    StackSwap,
+    StackDiscard,
+    StackSlide(i64),
+    Addition,
+    Subtraction,
+    Multiplication,
+    Division,
+    Modulo,
+    HeapStore,
+    HeapRetrieve,
+    Mark(i64),
+    Call(i64),
+    Jump(i64),
+    JumpIfZero(i64),
+    JumpIfNegative(i64),
+    Return,
+    Exit,
+    PutCharactor,
+    PutNumber,
+    GetCharactor,
+    GetNumber,
 }

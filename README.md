@@ -3,13 +3,13 @@
 
 This project provides infrastructure for implementing esolang.
 
+## Features
+
 - The virtual machine having the instruction set based on [Whitespace](http://compsoc.dur.ac.uk/whitespace/index.php)'s specification.
-- Parsers and code generators for some languages (e.g. [Whitespace](http://compsoc.dur.ac.uk/whitespace/index.php), [Ook!](http://www.dangermouse.net/esoteric/ook.html), etc)
+- Parsers and code generators for some languages (e.g. [Whitespace](http://compsoc.dur.ac.uk/whitespace/index.php), [Ook!](http://www.dangermouse.net/esoteric/ook.html), etc.)
 - Simple assembly language
 
-## Prerequisites
-
-- [Rust](http://www.rust-lang.org/) v0.12.0.
+[Rust](http://www.rust-lang.org/) v0.12.0-pre support.
 
 ## Usage
 
@@ -40,6 +40,10 @@ fn main() {
     }
 }
 ```
+
+## Application using Whitebase
+
+- [Albino](https://github.com/faultier/rust-albino)
 
 ## License
 

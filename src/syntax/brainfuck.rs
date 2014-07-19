@@ -9,7 +9,7 @@ use std::iter::{Counter, count};
 use bytecode::ByteCodeWriter;
 use ir;
 use ir::Instruction;
-use syntax::Compile;
+use syntax::Compiler;
 
 pub static BF_FAIL_MARKER: i64 = -1;
 pub static BF_PTR_ADDR: i64 = -1;
@@ -58,69 +58,69 @@ impl<I: Iterator<IoResult<Token>>> Iterator<IoResult<Instruction>> for Instructi
             None => {
                 let ret = match self.tokens.next() {
                     Some(Ok(MoveRight)) => vec!(
-                        Ok(ir::WBPush(BF_PTR_ADDR)),
-                        Ok(ir::WBDuplicate),
-                        Ok(ir::WBRetrieve),
-                        Ok(ir::WBPush(1)),
-                        Ok(ir::WBAddition),
-                        Ok(ir::WBStore),
+                        Ok(ir::StackPush(BF_PTR_ADDR)),
+                        Ok(ir::StackDuplicate),
+                        Ok(ir::HeapRetrieve),
+                        Ok(ir::StackPush(1)),
+                        Ok(ir::Addition),
+                        Ok(ir::HeapStore),
                     ),
                     Some(Ok(MoveLeft)) => vec!(
-                        Ok(ir::WBPush(BF_PTR_ADDR)),
-                        Ok(ir::WBDuplicate),
-                        Ok(ir::WBRetrieve),
-                        Ok(ir::WBPush(1)),
-                        Ok(ir::WBSubtraction),
-                        Ok(ir::WBDuplicate),
-                        Ok(ir::WBJumpIfNegative(BF_FAIL_MARKER)),
-                        Ok(ir::WBStore),
+                        Ok(ir::StackPush(BF_PTR_ADDR)),
+                        Ok(ir::StackDuplicate),
+                        Ok(ir::HeapRetrieve),
+                        Ok(ir::StackPush(1)),
+                        Ok(ir::Subtraction),
+                        Ok(ir::StackDuplicate),
+                        Ok(ir::JumpIfNegative(BF_FAIL_MARKER)),
+                        Ok(ir::HeapStore),
                     ),
                     Some(Ok(Increment)) => vec!(
-                        Ok(ir::WBPush(BF_PTR_ADDR)),
-                        Ok(ir::WBRetrieve),
-                        Ok(ir::WBDuplicate),
-                        Ok(ir::WBRetrieve),
-                        Ok(ir::WBPush(1)),
-                        Ok(ir::WBAddition),
-                        Ok(ir::WBStore),
+                        Ok(ir::StackPush(BF_PTR_ADDR)),
+                        Ok(ir::HeapRetrieve),
+                        Ok(ir::StackDuplicate),
+                        Ok(ir::HeapRetrieve),
+                        Ok(ir::StackPush(1)),
+                        Ok(ir::Addition),
+                        Ok(ir::HeapStore),
                     ),
                     Some(Ok(Decrement)) => vec!(
-                        Ok(ir::WBPush(BF_PTR_ADDR)),
-                        Ok(ir::WBRetrieve),
-                        Ok(ir::WBDuplicate),
-                        Ok(ir::WBRetrieve),
-                        Ok(ir::WBPush(1)),
-                        Ok(ir::WBSubtraction),
-                        Ok(ir::WBStore),
+                        Ok(ir::StackPush(BF_PTR_ADDR)),
+                        Ok(ir::HeapRetrieve),
+                        Ok(ir::StackDuplicate),
+                        Ok(ir::HeapRetrieve),
+                        Ok(ir::StackPush(1)),
+                        Ok(ir::Subtraction),
+                        Ok(ir::HeapStore),
                     ),
                     Some(Ok(Get)) => vec!(
-                        Ok(ir::WBPush(BF_PTR_ADDR)),
-                        Ok(ir::WBRetrieve),
-                        Ok(ir::WBRetrieve),
-                        Ok(ir::WBGetCharactor),
+                        Ok(ir::StackPush(BF_PTR_ADDR)),
+                        Ok(ir::HeapRetrieve),
+                        Ok(ir::HeapRetrieve),
+                        Ok(ir::GetCharactor),
                     ),
                     Some(Ok(Put)) => vec!(
-                        Ok(ir::WBPush(BF_PTR_ADDR)),
-                        Ok(ir::WBRetrieve),
-                        Ok(ir::WBRetrieve),
-                        Ok(ir::WBPutCharactor),
+                        Ok(ir::StackPush(BF_PTR_ADDR)),
+                        Ok(ir::HeapRetrieve),
+                        Ok(ir::HeapRetrieve),
+                        Ok(ir::PutCharactor),
                     ),
                     Some(Ok(LoopStart)) => {
                         let l: i64 = self.scount.next().unwrap();
                         self.stack.push(l);
                         vec!(
-                            Ok(ir::WBMark(self.marker(format!("{}#", l)))),
-                            Ok(ir::WBPush(BF_PTR_ADDR)),
-                            Ok(ir::WBRetrieve),
-                            Ok(ir::WBRetrieve),
-                            Ok(ir::WBJumpIfZero(self.marker(format!("#{}", l)))),
+                            Ok(ir::Mark(self.marker(format!("{}#", l)))),
+                            Ok(ir::StackPush(BF_PTR_ADDR)),
+                            Ok(ir::HeapRetrieve),
+                            Ok(ir::HeapRetrieve),
+                            Ok(ir::JumpIfZero(self.marker(format!("#{}", l)))),
                         )
                     }
                     Some(Ok(LoopEnd)) => {
                         match self.stack.pop() {
                             Some(l) => vec!(
-                                Ok(ir::WBJump(self.marker(format!("{}#", l)))),
-                                Ok(ir::WBMark(self.marker(format!("#{}", l)))),
+                                Ok(ir::Jump(self.marker(format!("{}#", l)))),
+                                Ok(ir::Mark(self.marker(format!("#{}", l)))),
                             ),
                             None => vec!(
                                 Err(IoError {
@@ -135,7 +135,7 @@ impl<I: Iterator<IoResult<Token>>> Iterator<IoResult<Instruction>> for Instructi
                     None => {
                         if self.parsed { return None }
                         self.parsed = true;
-                        vec!(Ok(ir::WBExit), Ok(ir::WBMark(BF_FAIL_MARKER)))
+                        vec!(Ok(ir::Exit), Ok(ir::Mark(BF_FAIL_MARKER)))
                     }
                 };
                 self.buffer.push_all(ret.as_slice());
@@ -225,7 +225,7 @@ impl Brainfuck {
     pub fn new() -> Brainfuck { Brainfuck }
 }
 
-impl Compile for Brainfuck {
+impl Compiler for Brainfuck {
     fn compile<B: Buffer, W: ByteCodeWriter>(&self, input: &mut B, output: &mut W) -> IoResult<()> {
         let mut it = scan(input).tokenize().parse();
         output.assemble(&mut it)
@@ -272,98 +272,98 @@ mod test {
     fn test_parse() {
         let mut buffer = BufReader::new(">".as_bytes());
         let mut it = super::scan(&mut buffer).tokenize().parse();
-        assert_eq!(it.next(), Some(Ok(WBPush(BF_PTR_ADDR))));
-        assert_eq!(it.next(), Some(Ok(WBDuplicate)));
-        assert_eq!(it.next(), Some(Ok(WBRetrieve)));
-        assert_eq!(it.next(), Some(Ok(WBPush(1))));
-        assert_eq!(it.next(), Some(Ok(WBAddition)));
-        assert_eq!(it.next(), Some(Ok(WBStore)));
-        assert_eq!(it.next(), Some(Ok(WBExit)));
-        assert_eq!(it.next(), Some(Ok(WBMark(BF_FAIL_MARKER))));
+        assert_eq!(it.next(), Some(Ok(StackPush(BF_PTR_ADDR))));
+        assert_eq!(it.next(), Some(Ok(StackDuplicate)));
+        assert_eq!(it.next(), Some(Ok(HeapRetrieve)));
+        assert_eq!(it.next(), Some(Ok(StackPush(1))));
+        assert_eq!(it.next(), Some(Ok(Addition)));
+        assert_eq!(it.next(), Some(Ok(HeapStore)));
+        assert_eq!(it.next(), Some(Ok(Exit)));
+        assert_eq!(it.next(), Some(Ok(Mark(BF_FAIL_MARKER))));
         assert!(it.next().is_none());
 
         let mut buffer = BufReader::new("<".as_bytes());
         let mut it = super::scan(&mut buffer).tokenize().parse();
-        assert_eq!(it.next(), Some(Ok(WBPush(BF_PTR_ADDR))));
-        assert_eq!(it.next(), Some(Ok(WBDuplicate)));
-        assert_eq!(it.next(), Some(Ok(WBRetrieve)));
-        assert_eq!(it.next(), Some(Ok(WBPush(1))));
-        assert_eq!(it.next(), Some(Ok(WBSubtraction)));
-        assert_eq!(it.next(), Some(Ok(WBDuplicate)));
-        assert_eq!(it.next(), Some(Ok(WBJumpIfNegative(BF_FAIL_MARKER))));
-        assert_eq!(it.next(), Some(Ok(WBStore)));
-        assert_eq!(it.next(), Some(Ok(WBExit)));
-        assert_eq!(it.next(), Some(Ok(WBMark(BF_FAIL_MARKER))));
+        assert_eq!(it.next(), Some(Ok(StackPush(BF_PTR_ADDR))));
+        assert_eq!(it.next(), Some(Ok(StackDuplicate)));
+        assert_eq!(it.next(), Some(Ok(HeapRetrieve)));
+        assert_eq!(it.next(), Some(Ok(StackPush(1))));
+        assert_eq!(it.next(), Some(Ok(Subtraction)));
+        assert_eq!(it.next(), Some(Ok(StackDuplicate)));
+        assert_eq!(it.next(), Some(Ok(JumpIfNegative(BF_FAIL_MARKER))));
+        assert_eq!(it.next(), Some(Ok(HeapStore)));
+        assert_eq!(it.next(), Some(Ok(Exit)));
+        assert_eq!(it.next(), Some(Ok(Mark(BF_FAIL_MARKER))));
         assert!(it.next().is_none());
 
         let mut buffer = BufReader::new("+".as_bytes());
         let mut it = super::scan(&mut buffer).tokenize().parse();
-        assert_eq!(it.next(), Some(Ok(WBPush(BF_PTR_ADDR))));
-        assert_eq!(it.next(), Some(Ok(WBRetrieve)));
-        assert_eq!(it.next(), Some(Ok(WBDuplicate)));
-        assert_eq!(it.next(), Some(Ok(WBRetrieve)));
-        assert_eq!(it.next(), Some(Ok(WBPush(1))));
-        assert_eq!(it.next(), Some(Ok(WBAddition)));
-        assert_eq!(it.next(), Some(Ok(WBStore)));
-        assert_eq!(it.next(), Some(Ok(WBExit)));
-        assert_eq!(it.next(), Some(Ok(WBMark(BF_FAIL_MARKER))));
+        assert_eq!(it.next(), Some(Ok(StackPush(BF_PTR_ADDR))));
+        assert_eq!(it.next(), Some(Ok(HeapRetrieve)));
+        assert_eq!(it.next(), Some(Ok(StackDuplicate)));
+        assert_eq!(it.next(), Some(Ok(HeapRetrieve)));
+        assert_eq!(it.next(), Some(Ok(StackPush(1))));
+        assert_eq!(it.next(), Some(Ok(Addition)));
+        assert_eq!(it.next(), Some(Ok(HeapStore)));
+        assert_eq!(it.next(), Some(Ok(Exit)));
+        assert_eq!(it.next(), Some(Ok(Mark(BF_FAIL_MARKER))));
         assert!(it.next().is_none());
 
         let mut buffer = BufReader::new("-".as_bytes());
         let mut it = super::scan(&mut buffer).tokenize().parse();
-        assert_eq!(it.next(), Some(Ok(WBPush(BF_PTR_ADDR))));
-        assert_eq!(it.next(), Some(Ok(WBRetrieve)));
-        assert_eq!(it.next(), Some(Ok(WBDuplicate)));
-        assert_eq!(it.next(), Some(Ok(WBRetrieve)));
-        assert_eq!(it.next(), Some(Ok(WBPush(1))));
-        assert_eq!(it.next(), Some(Ok(WBSubtraction)));
-        assert_eq!(it.next(), Some(Ok(WBStore)));
-        assert_eq!(it.next(), Some(Ok(WBExit)));
-        assert_eq!(it.next(), Some(Ok(WBMark(BF_FAIL_MARKER))));
+        assert_eq!(it.next(), Some(Ok(StackPush(BF_PTR_ADDR))));
+        assert_eq!(it.next(), Some(Ok(HeapRetrieve)));
+        assert_eq!(it.next(), Some(Ok(StackDuplicate)));
+        assert_eq!(it.next(), Some(Ok(HeapRetrieve)));
+        assert_eq!(it.next(), Some(Ok(StackPush(1))));
+        assert_eq!(it.next(), Some(Ok(Subtraction)));
+        assert_eq!(it.next(), Some(Ok(HeapStore)));
+        assert_eq!(it.next(), Some(Ok(Exit)));
+        assert_eq!(it.next(), Some(Ok(Mark(BF_FAIL_MARKER))));
         assert!(it.next().is_none());
 
         let mut buffer = BufReader::new(",".as_bytes());
         let mut it = super::scan(&mut buffer).tokenize().parse();
-        assert_eq!(it.next(), Some(Ok(WBPush(BF_PTR_ADDR))));
-        assert_eq!(it.next(), Some(Ok(WBRetrieve)));
-        assert_eq!(it.next(), Some(Ok(WBRetrieve)));
-        assert_eq!(it.next(), Some(Ok(WBGetCharactor)));
-        assert_eq!(it.next(), Some(Ok(WBExit)));
-        assert_eq!(it.next(), Some(Ok(WBMark(BF_FAIL_MARKER))));
+        assert_eq!(it.next(), Some(Ok(StackPush(BF_PTR_ADDR))));
+        assert_eq!(it.next(), Some(Ok(HeapRetrieve)));
+        assert_eq!(it.next(), Some(Ok(HeapRetrieve)));
+        assert_eq!(it.next(), Some(Ok(GetCharactor)));
+        assert_eq!(it.next(), Some(Ok(Exit)));
+        assert_eq!(it.next(), Some(Ok(Mark(BF_FAIL_MARKER))));
         assert!(it.next().is_none());
 
         let mut buffer = BufReader::new(".".as_bytes());
         let mut it = super::scan(&mut buffer).tokenize().parse();
-        assert_eq!(it.next(), Some(Ok(WBPush(BF_PTR_ADDR))));
-        assert_eq!(it.next(), Some(Ok(WBRetrieve)));
-        assert_eq!(it.next(), Some(Ok(WBRetrieve)));
-        assert_eq!(it.next(), Some(Ok(WBPutCharactor)));
-        assert_eq!(it.next(), Some(Ok(WBExit)));
-        assert_eq!(it.next(), Some(Ok(WBMark(BF_FAIL_MARKER))));
+        assert_eq!(it.next(), Some(Ok(StackPush(BF_PTR_ADDR))));
+        assert_eq!(it.next(), Some(Ok(HeapRetrieve)));
+        assert_eq!(it.next(), Some(Ok(HeapRetrieve)));
+        assert_eq!(it.next(), Some(Ok(PutCharactor)));
+        assert_eq!(it.next(), Some(Ok(Exit)));
+        assert_eq!(it.next(), Some(Ok(Mark(BF_FAIL_MARKER))));
         assert!(it.next().is_none());
 
         let mut buffer = BufReader::new("[[]]".as_bytes());
         let mut it = super::scan(&mut buffer).tokenize().parse();
         // outer loop
-        assert_eq!(it.next(), Some(Ok(WBMark(1))));
-        assert_eq!(it.next(), Some(Ok(WBPush(BF_PTR_ADDR))));
-        assert_eq!(it.next(), Some(Ok(WBRetrieve)));
-        assert_eq!(it.next(), Some(Ok(WBRetrieve)));
-        assert_eq!(it.next(), Some(Ok(WBJumpIfZero(2))));
+        assert_eq!(it.next(), Some(Ok(Mark(1))));
+        assert_eq!(it.next(), Some(Ok(StackPush(BF_PTR_ADDR))));
+        assert_eq!(it.next(), Some(Ok(HeapRetrieve)));
+        assert_eq!(it.next(), Some(Ok(HeapRetrieve)));
+        assert_eq!(it.next(), Some(Ok(JumpIfZero(2))));
         // inner loop
-        assert_eq!(it.next(), Some(Ok(WBMark(3))));
-        assert_eq!(it.next(), Some(Ok(WBPush(BF_PTR_ADDR))));
-        assert_eq!(it.next(), Some(Ok(WBRetrieve)));
-        assert_eq!(it.next(), Some(Ok(WBRetrieve)));
-        assert_eq!(it.next(), Some(Ok(WBJumpIfZero(4))));
-        assert_eq!(it.next(), Some(Ok(WBJump(3))));
-        assert_eq!(it.next(), Some(Ok(WBMark(4))));
+        assert_eq!(it.next(), Some(Ok(Mark(3))));
+        assert_eq!(it.next(), Some(Ok(StackPush(BF_PTR_ADDR))));
+        assert_eq!(it.next(), Some(Ok(HeapRetrieve)));
+        assert_eq!(it.next(), Some(Ok(HeapRetrieve)));
+        assert_eq!(it.next(), Some(Ok(JumpIfZero(4))));
+        assert_eq!(it.next(), Some(Ok(Jump(3))));
+        assert_eq!(it.next(), Some(Ok(Mark(4))));
         // outer loop
-        assert_eq!(it.next(), Some(Ok(WBJump(1))));
-        assert_eq!(it.next(), Some(Ok(WBMark(2))));
+        assert_eq!(it.next(), Some(Ok(Jump(1))));
+        assert_eq!(it.next(), Some(Ok(Mark(2))));
 
-        assert_eq!(it.next(), Some(Ok(WBExit)));
-        assert_eq!(it.next(), Some(Ok(WBMark(BF_FAIL_MARKER))));
+        assert_eq!(it.next(), Some(Ok(Exit)));
+        assert_eq!(it.next(), Some(Ok(Mark(BF_FAIL_MARKER))));
         assert!(it.next().is_none());
     }
 }

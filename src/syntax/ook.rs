@@ -6,7 +6,7 @@ use std::io::{EndOfFile, InvalidInput, IoError, IoResult, standard_error};
 use std::str::from_utf8;
 
 use bytecode::ByteCodeWriter;
-use syntax::Compile;
+use syntax::Compiler;
 use syntax::brainfuck::{Instructions, Token, MoveRight, MoveLeft, Increment, Decrement, Put, Get, LoopStart, LoopEnd};
 
 struct Tokens<T> {
@@ -118,7 +118,7 @@ impl Ook {
     pub fn new() -> Ook { Ook }
 }
 
-impl Compile for Ook {
+impl Compiler for Ook {
     fn compile<B: Buffer, W: ByteCodeWriter>(&self, input: &mut B, output: &mut W) -> IoResult<()> {
         let mut it = scan(input).tokenize().parse();
         output.assemble(&mut it)

@@ -97,30 +97,30 @@ impl<W: Writer> ByteCodeWriter for W {
     fn assemble<I: Iterator<IoResult<Instruction>>>(&mut self, iter: &mut I) -> IoResult<()> {
         for inst in *iter {
             try!(match inst {
-                Ok(ir::WBPush(n))           => self.write_push(n),
-                Ok(ir::WBDuplicate)         => self.write_dup(),
-                Ok(ir::WBCopy(n))           => self.write_copy(n),
-                Ok(ir::WBSwap)              => self.write_swap(),
-                Ok(ir::WBDiscard)           => self.write_discard(),
-                Ok(ir::WBSlide(n))          => self.write_slide(n),
-                Ok(ir::WBAddition)          => self.write_add(),
-                Ok(ir::WBSubtraction)       => self.write_sub(),
-                Ok(ir::WBMultiplication)    => self.write_mul(),
-                Ok(ir::WBDivision)          => self.write_div(),
-                Ok(ir::WBModulo)            => self.write_mod(),
-                Ok(ir::WBStore)             => self.write_store(),
-                Ok(ir::WBRetrieve)          => self.write_retrieve(),
-                Ok(ir::WBMark(n))           => self.write_mark(n),
-                Ok(ir::WBCall(n))           => self.write_call(n),
-                Ok(ir::WBJump(n))           => self.write_jump(n),
-                Ok(ir::WBJumpIfZero(n))     => self.write_jumpz(n),
-                Ok(ir::WBJumpIfNegative(n)) => self.write_jumpn(n),
-                Ok(ir::WBReturn)            => self.write_return(),
-                Ok(ir::WBExit)              => self.write_exit(),
-                Ok(ir::WBPutCharactor)      => self.write_putc(),
-                Ok(ir::WBPutNumber)         => self.write_putn(),
-                Ok(ir::WBGetCharactor)      => self.write_getc(),
-                Ok(ir::WBGetNumber)         => self.write_getn(),
+                Ok(ir::StackPush(n))      => self.write_push(n),
+                Ok(ir::StackDuplicate)    => self.write_dup(),
+                Ok(ir::StackCopy(n))      => self.write_copy(n),
+                Ok(ir::StackSwap)         => self.write_swap(),
+                Ok(ir::StackDiscard)      => self.write_discard(),
+                Ok(ir::StackSlide(n))     => self.write_slide(n),
+                Ok(ir::Addition)          => self.write_add(),
+                Ok(ir::Subtraction)       => self.write_sub(),
+                Ok(ir::Multiplication)    => self.write_mul(),
+                Ok(ir::Division)          => self.write_div(),
+                Ok(ir::Modulo)            => self.write_mod(),
+                Ok(ir::HeapStore)         => self.write_store(),
+                Ok(ir::HeapRetrieve)      => self.write_retrieve(),
+                Ok(ir::Mark(n))           => self.write_mark(n),
+                Ok(ir::Call(n))           => self.write_call(n),
+                Ok(ir::Jump(n))           => self.write_jump(n),
+                Ok(ir::JumpIfZero(n))     => self.write_jumpz(n),
+                Ok(ir::JumpIfNegative(n)) => self.write_jumpn(n),
+                Ok(ir::Return)            => self.write_return(),
+                Ok(ir::Exit)              => self.write_exit(),
+                Ok(ir::PutCharactor)      => self.write_putc(),
+                Ok(ir::PutNumber)         => self.write_putn(),
+                Ok(ir::GetCharactor)      => self.write_getc(),
+                Ok(ir::GetNumber)         => self.write_getn(),
                 Err(e)                      => Err(e),
             });
         }
@@ -241,30 +241,30 @@ pub struct Instructions<'r, T> {
 impl<'r, B: ByteCodeReader> Iterator<IoResult<Instruction>> for Instructions<'r, B> {
     fn next(&mut self) -> Option<IoResult<Instruction>> {
         match self.reader.read_inst() {
-            Ok((CMD_PUSH, n))     => Some(Ok(ir::WBPush(n))),
-            Ok((CMD_DUP, _))      => Some(Ok(ir::WBDuplicate)),
-            Ok((CMD_COPY, n))     => Some(Ok(ir::WBCopy(n))),
-            Ok((CMD_SWAP, _))     => Some(Ok(ir::WBSwap)),
-            Ok((CMD_DISCARD, _))  => Some(Ok(ir::WBDiscard)),
-            Ok((CMD_SLIDE, n))    => Some(Ok(ir::WBSlide(n))),
-            Ok((CMD_ADD, _))      => Some(Ok(ir::WBAddition)),
-            Ok((CMD_SUB, _))      => Some(Ok(ir::WBSubtraction)),
-            Ok((CMD_MUL, _))      => Some(Ok(ir::WBMultiplication)),
-            Ok((CMD_DIV, _))      => Some(Ok(ir::WBDivision)),
-            Ok((CMD_MOD, _))      => Some(Ok(ir::WBModulo)),
-            Ok((CMD_STORE, _))    => Some(Ok(ir::WBStore)),
-            Ok((CMD_RETRIEVE, _)) => Some(Ok(ir::WBRetrieve)),
-            Ok((CMD_MARK, n))     => Some(Ok(ir::WBMark(n))),
-            Ok((CMD_CALL, n))     => Some(Ok(ir::WBCall(n))),
-            Ok((CMD_JUMP, n))     => Some(Ok(ir::WBJump(n))),
-            Ok((CMD_JUMPZ, n))    => Some(Ok(ir::WBJumpIfZero(n))),
-            Ok((CMD_JUMPN, n))    => Some(Ok(ir::WBJumpIfNegative(n))),
-            Ok((CMD_RETURN, _))   => Some(Ok(ir::WBReturn)),
-            Ok((CMD_EXIT, _))     => Some(Ok(ir::WBExit)),
-            Ok((CMD_PUTC, _))     => Some(Ok(ir::WBPutCharactor)),
-            Ok((CMD_PUTN, _))     => Some(Ok(ir::WBPutNumber)),
-            Ok((CMD_GETC, _))     => Some(Ok(ir::WBGetCharactor)),
-            Ok((CMD_GETN, _))     => Some(Ok(ir::WBGetNumber)),
+            Ok((CMD_PUSH, n))     => Some(Ok(ir::StackPush(n))),
+            Ok((CMD_DUP, _))      => Some(Ok(ir::StackDuplicate)),
+            Ok((CMD_COPY, n))     => Some(Ok(ir::StackCopy(n))),
+            Ok((CMD_SWAP, _))     => Some(Ok(ir::StackSwap)),
+            Ok((CMD_DISCARD, _))  => Some(Ok(ir::StackDiscard)),
+            Ok((CMD_SLIDE, n))    => Some(Ok(ir::StackSlide(n))),
+            Ok((CMD_ADD, _))      => Some(Ok(ir::Addition)),
+            Ok((CMD_SUB, _))      => Some(Ok(ir::Subtraction)),
+            Ok((CMD_MUL, _))      => Some(Ok(ir::Multiplication)),
+            Ok((CMD_DIV, _))      => Some(Ok(ir::Division)),
+            Ok((CMD_MOD, _))      => Some(Ok(ir::Modulo)),
+            Ok((CMD_STORE, _))    => Some(Ok(ir::HeapStore)),
+            Ok((CMD_RETRIEVE, _)) => Some(Ok(ir::HeapRetrieve)),
+            Ok((CMD_MARK, n))     => Some(Ok(ir::Mark(n))),
+            Ok((CMD_CALL, n))     => Some(Ok(ir::Call(n))),
+            Ok((CMD_JUMP, n))     => Some(Ok(ir::Jump(n))),
+            Ok((CMD_JUMPZ, n))    => Some(Ok(ir::JumpIfZero(n))),
+            Ok((CMD_JUMPN, n))    => Some(Ok(ir::JumpIfNegative(n))),
+            Ok((CMD_RETURN, _))   => Some(Ok(ir::Return)),
+            Ok((CMD_EXIT, _))     => Some(Ok(ir::Exit)),
+            Ok((CMD_PUTC, _))     => Some(Ok(ir::PutCharactor)),
+            Ok((CMD_PUTN, _))     => Some(Ok(ir::PutNumber)),
+            Ok((CMD_GETC, _))     => Some(Ok(ir::GetCharactor)),
+            Ok((CMD_GETN, _))     => Some(Ok(ir::GetNumber)),
             Err(IoError { kind: EndOfFile, ..}) => None,
             Err(e) => Some(Err(e)),
             _ => Some(Err(standard_error(InvalidInput))),
@@ -372,30 +372,30 @@ mod test {
         let mut writer = MemWriter::new();
         {
             let vec: Vec<IoResult<ir::Instruction>> = vec!(
-                Ok(ir::WBPush(1)),
-                Ok(ir::WBDuplicate),
-                Ok(ir::WBCopy(2)),
-                Ok(ir::WBSwap),
-                Ok(ir::WBDiscard),
-                Ok(ir::WBSlide(3)),
-                Ok(ir::WBAddition),
-                Ok(ir::WBSubtraction),
-                Ok(ir::WBMultiplication),
-                Ok(ir::WBDivision),
-                Ok(ir::WBModulo),
-                Ok(ir::WBStore),
-                Ok(ir::WBRetrieve),
-                Ok(ir::WBMark(4)),
-                Ok(ir::WBCall(5)),
-                Ok(ir::WBJump(6)),
-                Ok(ir::WBJumpIfZero(7)),
-                Ok(ir::WBJumpIfNegative(8)),
-                Ok(ir::WBReturn),
-                Ok(ir::WBExit),
-                Ok(ir::WBPutCharactor),
-                Ok(ir::WBPutNumber),
-                Ok(ir::WBGetCharactor),
-                Ok(ir::WBGetNumber),
+                Ok(ir::StackPush(1)),
+                Ok(ir::StackDuplicate),
+                Ok(ir::StackCopy(2)),
+                Ok(ir::StackSwap),
+                Ok(ir::StackDiscard),
+                Ok(ir::StackSlide(3)),
+                Ok(ir::Addition),
+                Ok(ir::Subtraction),
+                Ok(ir::Multiplication),
+                Ok(ir::Division),
+                Ok(ir::Modulo),
+                Ok(ir::HeapStore),
+                Ok(ir::HeapRetrieve),
+                Ok(ir::Mark(4)),
+                Ok(ir::Call(5)),
+                Ok(ir::Jump(6)),
+                Ok(ir::JumpIfZero(7)),
+                Ok(ir::JumpIfNegative(8)),
+                Ok(ir::Return),
+                Ok(ir::Exit),
+                Ok(ir::PutCharactor),
+                Ok(ir::PutNumber),
+                Ok(ir::GetCharactor),
+                Ok(ir::GetNumber),
                 );
             let mut it = vec.move_iter();
             writer.assemble(&mut it).unwrap();
@@ -457,30 +457,30 @@ mod test {
 
         let mut reader = MemReader::new(writer.unwrap());
         let mut it = reader.disassemble();
-        assert_eq!(it.next().unwrap(), Ok(ir::WBPush(-1)));
-        assert_eq!(it.next().unwrap(), Ok(ir::WBDuplicate));
-        assert_eq!(it.next().unwrap(), Ok(ir::WBCopy(1)));
-        assert_eq!(it.next().unwrap(), Ok(ir::WBSwap));
-        assert_eq!(it.next().unwrap(), Ok(ir::WBDiscard));
-        assert_eq!(it.next().unwrap(), Ok(ir::WBSlide(2)));
-        assert_eq!(it.next().unwrap(), Ok(ir::WBAddition));
-        assert_eq!(it.next().unwrap(), Ok(ir::WBSubtraction));
-        assert_eq!(it.next().unwrap(), Ok(ir::WBMultiplication));
-        assert_eq!(it.next().unwrap(), Ok(ir::WBDivision));
-        assert_eq!(it.next().unwrap(), Ok(ir::WBModulo));
-        assert_eq!(it.next().unwrap(), Ok(ir::WBStore));
-        assert_eq!(it.next().unwrap(), Ok(ir::WBRetrieve));
-        assert_eq!(it.next().unwrap(), Ok(ir::WBMark(-1)));
-        assert_eq!(it.next().unwrap(), Ok(ir::WBCall(1)));
-        assert_eq!(it.next().unwrap(), Ok(ir::WBJump(-1)));
-        assert_eq!(it.next().unwrap(), Ok(ir::WBJumpIfZero(1)));
-        assert_eq!(it.next().unwrap(), Ok(ir::WBJumpIfNegative(-1)));
-        assert_eq!(it.next().unwrap(), Ok(ir::WBReturn));
-        assert_eq!(it.next().unwrap(), Ok(ir::WBExit));
-        assert_eq!(it.next().unwrap(), Ok(ir::WBPutCharactor));
-        assert_eq!(it.next().unwrap(), Ok(ir::WBPutNumber));
-        assert_eq!(it.next().unwrap(), Ok(ir::WBGetCharactor));
-        assert_eq!(it.next().unwrap(), Ok(ir::WBGetNumber));
+        assert_eq!(it.next().unwrap(), Ok(ir::StackPush(-1)));
+        assert_eq!(it.next().unwrap(), Ok(ir::StackDuplicate));
+        assert_eq!(it.next().unwrap(), Ok(ir::StackCopy(1)));
+        assert_eq!(it.next().unwrap(), Ok(ir::StackSwap));
+        assert_eq!(it.next().unwrap(), Ok(ir::StackDiscard));
+        assert_eq!(it.next().unwrap(), Ok(ir::StackSlide(2)));
+        assert_eq!(it.next().unwrap(), Ok(ir::Addition));
+        assert_eq!(it.next().unwrap(), Ok(ir::Subtraction));
+        assert_eq!(it.next().unwrap(), Ok(ir::Multiplication));
+        assert_eq!(it.next().unwrap(), Ok(ir::Division));
+        assert_eq!(it.next().unwrap(), Ok(ir::Modulo));
+        assert_eq!(it.next().unwrap(), Ok(ir::HeapStore));
+        assert_eq!(it.next().unwrap(), Ok(ir::HeapRetrieve));
+        assert_eq!(it.next().unwrap(), Ok(ir::Mark(-1)));
+        assert_eq!(it.next().unwrap(), Ok(ir::Call(1)));
+        assert_eq!(it.next().unwrap(), Ok(ir::Jump(-1)));
+        assert_eq!(it.next().unwrap(), Ok(ir::JumpIfZero(1)));
+        assert_eq!(it.next().unwrap(), Ok(ir::JumpIfNegative(-1)));
+        assert_eq!(it.next().unwrap(), Ok(ir::Return));
+        assert_eq!(it.next().unwrap(), Ok(ir::Exit));
+        assert_eq!(it.next().unwrap(), Ok(ir::PutCharactor));
+        assert_eq!(it.next().unwrap(), Ok(ir::PutNumber));
+        assert_eq!(it.next().unwrap(), Ok(ir::GetCharactor));
+        assert_eq!(it.next().unwrap(), Ok(ir::GetNumber));
         assert!(it.next().is_none());
     }
 }

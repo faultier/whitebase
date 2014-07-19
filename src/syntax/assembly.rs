@@ -6,7 +6,7 @@ use std::io::{EndOfFile, InvalidInput, IoError, IoResult, standard_error};
 
 use bytecode;
 use bytecode::{ByteCodeReader, ByteCodeWriter};
-use syntax::{Compile, Decompile};
+use syntax::{Compiler, Decompiler};
 
 macro_rules! try_number(
     ($val:expr) => (match from_str($val) {
@@ -27,7 +27,7 @@ impl Assembly {
     pub fn new() -> Assembly { Assembly }
 }
 
-impl Compile for Assembly {
+impl Compiler for Assembly {
     fn compile<B: Buffer, W: ByteCodeWriter>(&self, input: &mut B, output: &mut W) -> IoResult<()> {
         loop {
             let ret = match input.read_line() {
@@ -81,7 +81,7 @@ impl Compile for Assembly {
     }
 }
 
-impl Decompile for Assembly {
+impl Decompiler for Assembly {
     fn decompile<R: ByteCodeReader, W: Writer>(&self, input: &mut R, output: &mut W) -> IoResult<()> {
         loop {
             let res = match input.read_inst() {

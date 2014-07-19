@@ -6,7 +6,7 @@ use std::io::{EndOfFile, InvalidInput, IoError, IoResult, standard_error};
 
 use bytecode::{ByteCodeReader, ByteCodeWriter};
 use ir;
-use syntax::{Compile, Decompile};
+use syntax::{Compiler, Decompiler};
 use syntax::whitespace::{Instructions, Token, Space, Tab, LF};
 
 static S: &'static str = "ど";
@@ -99,42 +99,42 @@ impl DT {
     }
 }
 
-impl Compile for DT {
+impl Compiler for DT {
     fn compile<B: Buffer, W: ByteCodeWriter>(&self, input: &mut B, output: &mut W) -> IoResult<()> {
         let mut it = scan(input).tokenize().parse();
         output.assemble(&mut it)
     }
 }
 
-impl Decompile for DT {
+impl Decompiler for DT {
     fn decompile<R: ByteCodeReader, W: Writer>(&self, input: &mut R, output: &mut W) -> IoResult<()> {
         for inst in input.disassemble() {
             try!(match inst {
-                Ok(ir::WBPush(n))           => self.write_num(output, [S, S], n),
-                Ok(ir::WBDuplicate)         => self.write(output, [S, N, S]),
-                Ok(ir::WBCopy(n))           => self.write_num(output, [S, T, S], n),
-                Ok(ir::WBSwap)              => self.write(output, [S, N, T]),
-                Ok(ir::WBDiscard)           => self.write(output, [S, N, N]),
-                Ok(ir::WBSlide(n))          => self.write_num(output, [S, T, N], n),
-                Ok(ir::WBAddition)          => self.write(output, [T, S, S, S]),
-                Ok(ir::WBSubtraction)       => self.write(output, [T, S, S, T]),
-                Ok(ir::WBMultiplication)    => self.write(output, [T, S, S, N]),
-                Ok(ir::WBDivision)          => self.write(output, [T, S, T, S]),
-                Ok(ir::WBModulo)            => self.write(output, [T, S, T, T]),
-                Ok(ir::WBStore)             => self.write(output, [T, T, S]),
-                Ok(ir::WBRetrieve)          => self.write(output, [T, T, T]),
-                Ok(ir::WBMark(n))           => self.write_num(output, [N, S, S], n),
-                Ok(ir::WBCall(n))           => self.write_num(output, [N, S, T], n),
-                Ok(ir::WBJump(n))           => self.write_num(output, [N, S, N], n),
-                Ok(ir::WBJumpIfZero(n))     => self.write_num(output, [N, T, S], n),
-                Ok(ir::WBJumpIfNegative(n)) => self.write_num(output, [N, T, T], n),
-                Ok(ir::WBReturn)            => self.write(output, [N, T, N]),
-                Ok(ir::WBExit)              => self.write(output, [N, N, N]),
-                Ok(ir::WBPutCharactor)      => self.write(output, [T, N, S, S]),
-                Ok(ir::WBPutNumber)          => self.write(output, [T, N, S, T]),
-                Ok(ir::WBGetCharactor)       => self.write(output, [T, N, T, S]),
-                Ok(ir::WBGetNumber)          => self.write(output, [T, N, T, T]),
-                Err(e)                       => Err(e),
+                Ok(ir::StackPush(n))      => self.write_num(output, [S, S], n),
+                Ok(ir::StackDuplicate)    => self.write(output, [S, N, S]),
+                Ok(ir::StackCopy(n))      => self.write_num(output, [S, T, S], n),
+                Ok(ir::StackSwap)         => self.write(output, [S, N, T]),
+                Ok(ir::StackDiscard)      => self.write(output, [S, N, N]),
+                Ok(ir::StackSlide(n))     => self.write_num(output, [S, T, N], n),
+                Ok(ir::Addition)          => self.write(output, [T, S, S, S]),
+                Ok(ir::Subtraction)       => self.write(output, [T, S, S, T]),
+                Ok(ir::Multiplication)    => self.write(output, [T, S, S, N]),
+                Ok(ir::Division)          => self.write(output, [T, S, T, S]),
+                Ok(ir::Modulo)            => self.write(output, [T, S, T, T]),
+                Ok(ir::HeapStore)         => self.write(output, [T, T, S]),
+                Ok(ir::HeapRetrieve)      => self.write(output, [T, T, T]),
+                Ok(ir::Mark(n))           => self.write_num(output, [N, S, S], n),
+                Ok(ir::Call(n))           => self.write_num(output, [N, S, T], n),
+                Ok(ir::Jump(n))           => self.write_num(output, [N, S, N], n),
+                Ok(ir::JumpIfZero(n))     => self.write_num(output, [N, T, S], n),
+                Ok(ir::JumpIfNegative(n)) => self.write_num(output, [N, T, T], n),
+                Ok(ir::Return)            => self.write(output, [N, T, N]),
+                Ok(ir::Exit)              => self.write(output, [N, N, N]),
+                Ok(ir::PutCharactor)      => self.write(output, [T, N, S, S]),
+                Ok(ir::PutNumber)         => self.write(output, [T, N, S, T]),
+                Ok(ir::GetCharactor)      => self.write(output, [T, N, T, S]),
+                Ok(ir::GetNumber)         => self.write(output, [T, N, T, T]),
+                Err(e)                    => Err(e),
             });
         }
         Ok(())
