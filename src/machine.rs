@@ -1,5 +1,7 @@
 //! A virtual machine that execute Whitebase bytecode.
 
+#![experimental]
+
 use std::collections::HashMap;
 use std::collections::TreeMap;
 use std::io::{BufferedReader, EndOfFile, InvalidInput, IoError, SeekSet, standard_error};

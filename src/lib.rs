@@ -1,4 +1,4 @@
-/*! Infrastructure for implementing esolang.
+/*! The infrastructure for implementing esolang.
 
 `whitebase` provides the virtual machine,
 parsers and generators, and assembly language.
@@ -8,7 +8,7 @@ extern crate whitebase;
 
 use std::io::{BufReader, MemReader, MemWriter};
 use whitebase::machine;
-use whitebase::syntax::{Compiler, Whitespace};
+use whitebase::syntax::{Compile, Whitespace};
 
 fn main() {
     let src = "   \t\t \t  \t\n   \t  \t   \n\t\n  \t\n  \n\n\n";
@@ -32,8 +32,10 @@ fn main() {
 
 #![crate_name="whitebase"]
 #![crate_type="rlib"]
-
+#![warn(missing_doc)]
 #![feature(phase, globs, macro_rules)]
+#![experimental]
+
 #[phase(plugin, link)] extern crate log;
 
 pub mod bytecode;

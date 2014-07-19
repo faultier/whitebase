@@ -1,19 +1,52 @@
 //! Parser and Generator for DT.
 
+#![experimental]
+
 use std::io::{EndOfFile, InvalidInput, IoError, IoResult, standard_error};
 
-use bytecode::ByteCodeReader;
+use bytecode::{ByteCodeReader, ByteCodeWriter};
 use ir;
-use ir::Instruction;
-use syntax::{Compiler, Decompiler};
-use syntax::whitespace::{Parser, Token, Space, Tab, LF};
+use syntax::{Compile, Decompile};
+use syntax::whitespace::{Instructions, Token, Space, Tab, LF};
 
 static S: &'static str = "ど";
 static T: &'static str = "童貞ちゃうわっ！";
 static N: &'static str = "…";
 
+struct Tokens<T> {
+    lexemes: T
+}
+
+impl<I: Iterator<IoResult<String>>> Tokens<I> {
+    pub fn parse(self) -> Instructions<Tokens<I>> { Instructions::new(self) }
+}
+
+impl<I: Iterator<IoResult<String>>> Iterator<IoResult<Token>> for Tokens<I> {
+    fn next(&mut self) -> Option<IoResult<Token>> {
+        let op = self.lexemes.next();
+        if op.is_none() { return None; }
+
+        let res = op.unwrap();
+         match res {
+             Err(e) => return Some(Err(e)),
+             Ok(_) => (),
+        }
+
+        Some(match res.unwrap().as_slice() {
+            S => Ok(Space),
+            T => Ok(Tab),
+            N => Ok(LF),
+            _ => Err(standard_error(InvalidInput)),
+        })
+    }
+}
+
 struct Scan<'r, T> {
     buffer: &'r mut T
+}
+
+impl<'r, B: Buffer> Scan<'r, B> {
+    pub fn tokenize(self) -> Tokens<Scan<'r, B>> { Tokens { lexemes: self } }
 }
 
 impl<'r, B: Buffer> Iterator<IoResult<String>> for Scan<'r, B> {
@@ -41,29 +74,7 @@ impl<'r, B: Buffer> Iterator<IoResult<String>> for Scan<'r, B> {
     }
 }
 
-struct Tokens<T> {
-    iter: T
-}
-
-impl<I: Iterator<IoResult<String>>> Iterator<IoResult<Token>> for Tokens<I> {
-    fn next(&mut self) -> Option<IoResult<Token>> {
-        let op = self.iter.next();
-        if op.is_none() { return None; }
-
-        let res = op.unwrap();
-         match res {
-             Err(e) => return Some(Err(e)),
-             Ok(_) => (),
-        }
-
-        Some(match res.unwrap().as_slice() {
-            S => Ok(Space),
-            T => Ok(Tab),
-            N => Ok(LF),
-            _ => Err(standard_error(InvalidInput)),
-        })
-    }
-}
+fn scan<'r, B: Buffer>(buffer: &'r mut B) -> Scan<'r, B> { Scan { buffer: buffer } }
 
 /// Compiler and Decompiler for DT.
 pub struct DT;
@@ -88,47 +99,43 @@ impl DT {
     }
 }
 
-impl Compiler for DT {
-    fn parse<B: Buffer>(&self, input: &mut B, output: &mut Vec<Instruction>) -> IoResult<()> {
-        Parser::new(Tokens { iter: Scan { buffer: input } }).parse(output)
+impl Compile for DT {
+    fn compile<B: Buffer, W: ByteCodeWriter>(&self, input: &mut B, output: &mut W) -> IoResult<()> {
+        let mut it = scan(input).tokenize().parse();
+        output.assemble(&mut it)
     }
 }
 
-impl Decompiler for DT {
+impl Decompile for DT {
     fn decompile<R: ByteCodeReader, W: Writer>(&self, input: &mut R, output: &mut W) -> IoResult<()> {
-        let mut ast = vec!();
-        try!(self.disassemble(input, &mut ast));
-        for inst in ast.iter() {
-            let ret = match inst {
-                &ir::WBPush(n)              => self.write_num(output, [S, S], n),
-                &ir::WBDuplicate            => self.write(output, [S, N, S]),
-                &ir::WBCopy(n)              => self.write_num(output, [S, T, S], n),
-                &ir::WBSwap                 => self.write(output, [S, N, T]),
-                &ir::WBDiscard              => self.write(output, [S, N, N]),
-                &ir::WBSlide(n)             => self.write_num(output, [S, T, N], n),
-                &ir::WBAddition             => self.write(output, [T, S, S, S]),
-                &ir::WBSubtraction          => self.write(output, [T, S, S, T]),
-                &ir::WBMultiplication       => self.write(output, [T, S, S, N]),
-                &ir::WBDivision             => self.write(output, [T, S, T, S]),
-                &ir::WBModulo               => self.write(output, [T, S, T, T]),
-                &ir::WBStore                => self.write(output, [T, T, S]),
-                &ir::WBRetrieve             => self.write(output, [T, T, T]),
-                &ir::WBMark(n)              => self.write_num(output, [N, S, S], n),
-                &ir::WBCall(n)              => self.write_num(output, [N, S, T], n),
-                &ir::WBJump(n)              => self.write_num(output, [N, S, N], n),
-                &ir::WBJumpIfZero(n)        => self.write_num(output, [N, T, S], n),
-                &ir::WBJumpIfNegative(n)    => self.write_num(output, [N, T, T], n),
-                &ir::WBReturn               => self.write(output, [N, T, N]),
-                &ir::WBExit                 => self.write(output, [N, N, N]),
-                &ir::WBPutCharactor         => self.write(output, [T, N, S, S]),
-                &ir::WBPutNumber            => self.write(output, [T, N, S, T]),
-                &ir::WBGetCharactor         => self.write(output, [T, N, T, S]),
-                &ir::WBGetNumber            => self.write(output, [T, N, T, T]),
-            };
-            match ret {
-                Err(e) => return Err(e),
-                _ => continue,
-            }
+        for inst in input.disassemble() {
+            try!(match inst {
+                Ok(ir::WBPush(n))           => self.write_num(output, [S, S], n),
+                Ok(ir::WBDuplicate)         => self.write(output, [S, N, S]),
+                Ok(ir::WBCopy(n))           => self.write_num(output, [S, T, S], n),
+                Ok(ir::WBSwap)              => self.write(output, [S, N, T]),
+                Ok(ir::WBDiscard)           => self.write(output, [S, N, N]),
+                Ok(ir::WBSlide(n))          => self.write_num(output, [S, T, N], n),
+                Ok(ir::WBAddition)          => self.write(output, [T, S, S, S]),
+                Ok(ir::WBSubtraction)       => self.write(output, [T, S, S, T]),
+                Ok(ir::WBMultiplication)    => self.write(output, [T, S, S, N]),
+                Ok(ir::WBDivision)          => self.write(output, [T, S, T, S]),
+                Ok(ir::WBModulo)            => self.write(output, [T, S, T, T]),
+                Ok(ir::WBStore)             => self.write(output, [T, T, S]),
+                Ok(ir::WBRetrieve)          => self.write(output, [T, T, T]),
+                Ok(ir::WBMark(n))           => self.write_num(output, [N, S, S], n),
+                Ok(ir::WBCall(n))           => self.write_num(output, [N, S, T], n),
+                Ok(ir::WBJump(n))           => self.write_num(output, [N, S, N], n),
+                Ok(ir::WBJumpIfZero(n))     => self.write_num(output, [N, T, S], n),
+                Ok(ir::WBJumpIfNegative(n)) => self.write_num(output, [N, T, T], n),
+                Ok(ir::WBReturn)            => self.write(output, [N, T, N]),
+                Ok(ir::WBExit)              => self.write(output, [N, N, N]),
+                Ok(ir::WBPutCharactor)      => self.write(output, [T, N, S, S]),
+                Ok(ir::WBPutNumber)          => self.write(output, [T, N, S, T]),
+                Ok(ir::WBGetCharactor)       => self.write(output, [T, N, T, S]),
+                Ok(ir::WBGetNumber)          => self.write(output, [T, N, T, T]),
+                Err(e)                       => Err(e),
+            });
         }
         Ok(())
     }
@@ -140,7 +147,6 @@ mod test {
     use std::str::from_utf8;
 
     use super::*;
-    use ir::*;
     use syntax::*;
     use syntax::whitespace::*;
 
@@ -154,7 +160,7 @@ mod test {
     fn test_scan() {
         let source = vec!(S, "童貞饂飩ちゃうわっ！", T, "\n", N).concat();
         let mut buffer = BufReader::new(source.as_slice().as_bytes());
-        let mut it = super::Scan { buffer: &mut buffer };
+        let mut it = super::scan(&mut buffer);
         assert_eq!(it.next(), Some(Ok(S.to_string())));
         assert_eq!(it.next(), Some(Ok(T.to_string())));
         assert_eq!(it.next(), Some(Ok(N.to_string())));
@@ -165,109 +171,11 @@ mod test {
     fn test_tokenize() {
         let source = vec!(S, "童貞饂飩ちゃうわっ！", T, "\n", N).concat();
         let mut buffer = BufReader::new(source.as_slice().as_bytes());
-        let mut it = super::Tokens { iter: super::Scan { buffer: &mut buffer } };
+        let mut it = super::scan(&mut buffer).tokenize();
         assert_eq!(it.next(), Some(Ok(Space)));
         assert_eq!(it.next(), Some(Ok(Tab)));
         assert_eq!(it.next(), Some(Ok(LF)));
         assert!(it.next().is_none());
-    }
-
-    #[test]
-    fn test_parse_stack() {
-        let source = vec!(
-            S, S, S, T, N,      // PUSH 1
-            S, N, S,            // DUP
-            S, T, S, S, T, N,   // COPY 1
-            S, N, T,            // SWAP
-            S, N, N,            // DISCARD
-            S, T, N, S, T, N,   // SLIDE 1
-            ).concat();
-        let syntax = DT::new();
-        let mut ast: Vec<Instruction> = vec!();
-        syntax.parse_str(source.as_slice(), &mut ast).unwrap();
-        assert_eq!(ast.shift(), Some(WBPush(1)));
-        assert_eq!(ast.shift(), Some(WBDuplicate));
-        assert_eq!(ast.shift(), Some(WBCopy(1)));
-        assert_eq!(ast.shift(), Some(WBSwap));
-        assert_eq!(ast.shift(), Some(WBDiscard));
-        assert_eq!(ast.shift(), Some(WBSlide(1)));
-        assert!(ast.shift().is_none());
-    }
-
-    #[test]
-    fn test_parse_arithmetic() {
-        let source = vec!(
-            T, S, S, S, // ADD
-            T, S, S, T, // SUB
-            T, S, S, N, // MUL
-            T, S, T, S, // DIV
-            T, S, T, T, // MOD
-            ).concat();
-        let syntax = DT::new();
-        let mut ast: Vec<Instruction> = vec!();
-        syntax.parse_str(source.as_slice(), &mut ast).unwrap();
-        assert_eq!(ast.shift(), Some(WBAddition));
-        assert_eq!(ast.shift(), Some(WBSubtraction));
-        assert_eq!(ast.shift(), Some(WBMultiplication));
-        assert_eq!(ast.shift(), Some(WBDivision));
-        assert_eq!(ast.shift(), Some(WBModulo));
-        assert!(ast.shift().is_none());
-    }
-
-    #[test]
-    fn test_parse_heap() {
-        let source = vec!(
-            T, T, S,    // STORE
-            T, T, T,    // RETRIEVE
-            ).concat();
-        let syntax = DT::new();
-        let mut ast: Vec<Instruction> = vec!();
-        syntax.parse_str(source.as_slice(), &mut ast).unwrap();
-        assert_eq!(ast.shift(), Some(WBStore));
-        assert_eq!(ast.shift(), Some(WBRetrieve));
-        assert!(ast.shift().is_none());
-    }
-
-    #[test]
-    fn test_parse_flow() {
-        let source = vec!(
-            N, S, S, S, T, N,   // MARK 01
-            N, S, T, T, S, N,   // CALL 10
-            N, S, N, S, T, N,   // JUMP 01
-            N, T, S, T, S, N,   // JUMPZ 10
-            N, T, T, S, T, N,   // JUMPN 01
-            N, T, N,            // RETURN
-            N, N, N,            // EXIT
-            ).concat();
-        let syntax = DT::new();
-        let mut ast: Vec<Instruction> = vec!();
-        syntax.parse_str(source.as_slice(), &mut ast).unwrap();
-        assert_eq!(ast.shift(), Some(WBMark(1)));
-        assert_eq!(ast.shift(), Some(WBCall(2)));
-        assert_eq!(ast.shift(), Some(WBJump(1)));
-        assert_eq!(ast.shift(), Some(WBJumpIfZero(2)));
-        assert_eq!(ast.shift(), Some(WBJumpIfNegative(1)));
-        assert_eq!(ast.shift(), Some(WBReturn));
-        assert_eq!(ast.shift(), Some(WBExit));
-        assert!(ast.shift().is_none());
-    }
-
-    #[test]
-    fn test_parse_io() {
-        let source = vec!(
-            T, N, S, S, // PUTC
-            T, N, S, T, // PUTN
-            T, N, T, S, // GETC
-            T, N, T, T, // GETN
-            ).concat();
-        let syntax = DT::new();
-        let mut ast: Vec<Instruction> = vec!();
-        syntax.parse_str(source.as_slice(), &mut ast).unwrap();
-        assert_eq!(ast.shift(), Some(WBPutCharactor));
-        assert_eq!(ast.shift(), Some(WBPutNumber));
-        assert_eq!(ast.shift(), Some(WBGetCharactor));
-        assert_eq!(ast.shift(), Some(WBGetNumber));
-        assert!(ast.shift().is_none());
     }
 
     #[test]

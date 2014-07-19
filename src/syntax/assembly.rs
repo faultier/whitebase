@@ -1,13 +1,12 @@
 //! Assembler and Disassembler.
 
-use std::collections::HashMap;
-use std::io::{EndOfFile, InvalidInput, IoError, IoResult, standard_error};
-use std::iter::{Counter, count};
+#![experimental]
 
-use bytecode::ByteCodeReader;
-use ir;
-use ir::Instruction;
-use syntax::{Compiler, Decompiler};
+use std::io::{EndOfFile, InvalidInput, IoError, IoResult, standard_error};
+
+use bytecode;
+use bytecode::{ByteCodeReader, ByteCodeWriter};
+use syntax::{Compile, Decompile};
 
 macro_rules! try_number(
     ($val:expr) => (match from_str($val) {
@@ -26,23 +25,10 @@ pub struct Assembly;
 impl Assembly {
     /// Create a new `Assembly`.
     pub fn new() -> Assembly { Assembly }
-
-    fn marker(&self, label: String, labels: &mut HashMap<String, i64>, counter: &mut Counter<i64>) -> i64 {
-        match labels.find_copy(&label) {
-            Some(val) => val,
-            None => {
-                let val = counter.next().unwrap();
-                labels.insert(label, val);
-                val
-            },
-        }
-    }
 }
 
-impl Compiler for Assembly {
-    fn parse<B: Buffer>(&self, input: &mut B, output: &mut Vec<Instruction>) -> IoResult<()> {
-        let mut labels = HashMap::new();
-        let mut counter = count(1, 1);
+impl Compile for Assembly {
+    fn compile<B: Buffer, W: ByteCodeWriter>(&self, input: &mut B, output: &mut W) -> IoResult<()> {
         loop {
             let ret = match input.read_line() {
                 Ok(line) => {
@@ -55,37 +41,38 @@ impl Compiler for Assembly {
                         None => (slice, ""),
                     };
                     match mnemonic {
-                        "PUSH"     => Ok(ir::WBPush(try_number!(val))),
-                        "DUP"      => Ok(ir::WBDuplicate),
-                        "COPY"     => Ok(ir::WBCopy(try_number!(val))),
-                        "SWAP"     => Ok(ir::WBSwap),
-                        "DISCARD"  => Ok(ir::WBDiscard),
-                        "SLIDE"    => Ok(ir::WBSlide(try_number!(val))),
-                        "ADD"      => Ok(ir::WBAddition),
-                        "SUB"      => Ok(ir::WBSubtraction),
-                        "MUL"      => Ok(ir::WBMultiplication),
-                        "DIV"      => Ok(ir::WBDivision),
-                        "MOD"      => Ok(ir::WBModulo),
-                        "STORE"    => Ok(ir::WBStore),
-                        "RETRIEVE" => Ok(ir::WBRetrieve),
-                        "MARK"     => Ok(ir::WBMark(self.marker(val.to_string(), &mut labels, &mut counter))),
-                        "CALL"     => Ok(ir::WBCall(self.marker(val.to_string(), &mut labels, &mut counter))),
-                        "JUMP"     => Ok(ir::WBJump(self.marker(val.to_string(), &mut labels, &mut counter))),
-                        "JUMPZ"    => Ok(ir::WBJumpIfZero(self.marker(val.to_string(), &mut labels, &mut counter))),
-                        "JUMPN"    => Ok(ir::WBJumpIfNegative(self.marker(val.to_string(), &mut labels, &mut counter))),
-                        "RETURN"   => Ok(ir::WBReturn),
-                        "EXIT"     => Ok(ir::WBExit),
-                        "PUTC"     => Ok(ir::WBPutCharactor),
-                        "PUTN"     => Ok(ir::WBPutNumber),
-                        "GETC"     => Ok(ir::WBGetCharactor),
-                        "GETN"     => Ok(ir::WBGetNumber),
+                        "PUSH"     => output.write_push(try_number!(val)),
+                        "DUP"      => output.write_dup(),
+                        "COPY"     => output.write_copy(try_number!(val)),
+                        "SWAP"     => output.write_swap(),
+                        "DISCARD"  => output.write_discard(),
+                        "SLIDE"    => output.write_slide(try_number!(val)),
+                        "ADD"      => output.write_add(),
+                        "SUB"      => output.write_sub(),
+                        "MUL"      => output.write_mul(),
+                        "DIV"      => output.write_div(),
+                        "MOD"      => output.write_mod(),
+                        "STORE"    => output.write_store(),
+                        "RETRIEVE" => output.write_retrieve(),
+                        "MARK"     => output.write_mark(try_number!(val)),
+                        "CALL"     => output.write_call(try_number!(val)),
+                        "JUMP"     => output.write_jump(try_number!(val)),
+                        "JUMPZ"    => output.write_jumpz(try_number!(val)),
+                        "JUMPN"    => output.write_jumpn(try_number!(val)),
+                        "RETURN"   => output.write_return(),
+                        "EXIT"     => output.write_exit(),
+                        "PUTC"     => output.write_putc(),
+                        "PUTN"     => output.write_putn(),
+                        "GETC"     => output.write_getc(),
+                        "GETN"     => output.write_getn(),
                         _          => Err(standard_error(InvalidInput)),
                     }
                 },
                 Err(e) => Err(e),
             };
+
             match ret {
-                Ok(inst) => output.push(inst),
+                Ok(()) => continue,
                 Err(ref e) if e.kind == EndOfFile => break,
                 Err(e) => return Err(e),
             }
@@ -94,36 +81,36 @@ impl Compiler for Assembly {
     }
 }
 
-impl Decompiler for Assembly {
+impl Decompile for Assembly {
     fn decompile<R: ByteCodeReader, W: Writer>(&self, input: &mut R, output: &mut W) -> IoResult<()> {
-        let mut ast = vec!();
-        try!(self.disassemble(input, &mut ast));
-        for inst in ast.iter() {
-            let res = match inst {
-                &ir::WBPush(n)              => write!(output, "PUSH {}\n", n),
-                &ir::WBDuplicate            => output.write_line("DUP"),
-                &ir::WBCopy(n)              => write!(output, "COPY {}\n", n),
-                &ir::WBSwap                 => output.write_line("SWAP"),
-                &ir::WBDiscard              => output.write_line("DISCARD"),
-                &ir::WBSlide(n)             => write!(output, "SLIDE {}\n", n),
-                &ir::WBAddition             => output.write_line("ADD"),
-                &ir::WBSubtraction          => output.write_line("SUB"),
-                &ir::WBMultiplication       => output.write_line("MUL"),
-                &ir::WBDivision             => output.write_line("DIV"),
-                &ir::WBModulo               => output.write_line("MOD"),
-                &ir::WBStore                => output.write_line("STORE"),
-                &ir::WBRetrieve             => output.write_line("RETRIEVE"),
-                &ir::WBMark(n)              => write!(output, "MARK {:X}\n", n),
-                &ir::WBCall(n)              => write!(output, "CALL {:X}\n", n),
-                &ir::WBJump(n)              => write!(output, "JUMP {:X}\n", n),
-                &ir::WBJumpIfZero(n)        => write!(output, "JUMPZ {:X}\n", n),
-                &ir::WBJumpIfNegative(n)    => write!(output, "JUMPN {:X}\n", n),
-                &ir::WBReturn               => output.write_line("RETURN"),
-                &ir::WBExit                 => output.write_line("EXIT"),
-                &ir::WBPutCharactor         => output.write_line("PUTC"),
-                &ir::WBPutNumber            => output.write_line("PUTN"),
-                &ir::WBGetCharactor         => output.write_line("GETC"),
-                &ir::WBGetNumber            => output.write_line("GETN"),
+        loop {
+            let res = match input.read_inst() {
+                Ok((bytecode::CMD_PUSH, n))     => write!(output, "PUSH {}\n", n),
+                Ok((bytecode::CMD_DUP, _))      => output.write_line("DUP"),
+                Ok((bytecode::CMD_COPY, n))     => write!(output, "COPY {}\n", n),
+                Ok((bytecode::CMD_SWAP, _))     => output.write_line("SWAP"),
+                Ok((bytecode::CMD_DISCARD, _))  => output.write_line("DISCARD"),
+                Ok((bytecode::CMD_SLIDE, n))    => write!(output, "SLIDE {}\n", n),
+                Ok((bytecode::CMD_ADD, _))      => output.write_line("ADD"),
+                Ok((bytecode::CMD_SUB, _))      => output.write_line("SUB"),
+                Ok((bytecode::CMD_MUL, _))      => output.write_line("MUL"),
+                Ok((bytecode::CMD_DIV, _))      => output.write_line("DIV"),
+                Ok((bytecode::CMD_MOD, _))      => output.write_line("MOD"),
+                Ok((bytecode::CMD_STORE, _))    => output.write_line("STORE"),
+                Ok((bytecode::CMD_RETRIEVE, _)) => output.write_line("RETRIEVE"),
+                Ok((bytecode::CMD_MARK, n))     => write!(output, "MARK {}\n", n),
+                Ok((bytecode::CMD_CALL, n))     => write!(output, "CALL {}\n", n),
+                Ok((bytecode::CMD_JUMP, n))     => write!(output, "JUMP {}\n", n),
+                Ok((bytecode::CMD_JUMPZ, n))    => write!(output, "JUMPZ {}\n", n),
+                Ok((bytecode::CMD_JUMPN, n))    => write!(output, "JUMPN {}\n", n),
+                Ok((bytecode::CMD_RETURN, _))   => output.write_line("RETURN"),
+                Ok((bytecode::CMD_EXIT, _))     => output.write_line("EXIT"),
+                Ok((bytecode::CMD_PUTC, _))     => output.write_line("PUTC"),
+                Ok((bytecode::CMD_PUTN, _))     => output.write_line("PUTN"),
+                Ok((bytecode::CMD_GETC, _))     => output.write_line("GETC"),
+                Ok((bytecode::CMD_GETN, _))     => output.write_line("GETN"),
+                Ok(_)                           => Err(standard_error(InvalidInput)),
+                Err(e)                          => Err(e),
             };
             match res {
                 Err(ref e) if e.kind == EndOfFile => break,
@@ -137,113 +124,76 @@ impl Decompiler for Assembly {
 
 #[cfg(test)]
 mod test {
-    use std::io::{MemReader, MemWriter};
+    use std::io::{BufReader, MemReader, MemWriter};
     use std::str::from_utf8;
     use super::*;
-    use ir::*;
-    use bytecode::ByteCodeWriter;
+    use bytecode::*;
     use syntax::*;
 
     #[test]
-    fn test_parse_stack() {
+    fn test_assemble() {
         let source = vec!(
             "PUSH 1",
             "DUP",
-            "COPY -1",
+            "COPY 2",
             "SWAP",
             "DISCARD",
-            "SLIDE 1000",
-            ).connect("\n");
-        let syntax = Assembly::new();
-        let mut ast: Vec<Instruction> = vec!();
-        syntax.parse_str(source.as_slice(), &mut ast).unwrap();
-        assert_eq!(ast.shift(), Some(WBPush(1)));
-        assert_eq!(ast.shift(), Some(WBDuplicate));
-        assert_eq!(ast.shift(), Some(WBCopy(-1)));
-        assert_eq!(ast.shift(), Some(WBSwap));
-        assert_eq!(ast.shift(), Some(WBDiscard));
-        assert_eq!(ast.shift(), Some(WBSlide(1000)));
-        assert!(ast.shift().is_none());
-    }
-
-    #[test]
-    fn test_parse_arithmetic() {
-        let source = vec!(
+            "SLIDE 3",
             "ADD",
             "SUB",
             "MUL",
             "DIV",
             "MOD",
-            ).connect("\n");
-        let syntax = Assembly::new();
-        let mut ast: Vec<Instruction> = vec!();
-        syntax.parse_str(source.as_slice(), &mut ast).unwrap();
-        assert_eq!(ast.shift(), Some(WBAddition));
-        assert_eq!(ast.shift(), Some(WBSubtraction));
-        assert_eq!(ast.shift(), Some(WBMultiplication));
-        assert_eq!(ast.shift(), Some(WBDivision));
-        assert_eq!(ast.shift(), Some(WBModulo));
-        assert!(ast.shift().is_none());
-    }
-
-    #[test]
-    fn test_parse_heap() {
-        let source = vec!(
             "STORE",
             "RETRIEVE",
-            ).connect("\n");
-        let syntax = Assembly::new();
-        let mut ast: Vec<Instruction> = vec!();
-        syntax.parse_str(source.as_slice(), &mut ast).unwrap();
-        assert_eq!(ast.shift(), Some(WBStore));
-        assert_eq!(ast.shift(), Some(WBRetrieve));
-        assert!(ast.shift().is_none());
-    }
-
-    #[test]
-    fn test_parse_flow() {
-        let source = vec!(
-            "MARK 1",
-            "CALL string",
-            "JUMP 1",
-            "JUMPZ other",
-            "JUMPN 1",
+            "MARK 4",
+            "CALL 5",
+            "JUMP 6",
+            "JUMPZ 7",
+            "JUMPN 8",
             "RETURN",
             "EXIT",
-            ).connect("\n");
-        let syntax = Assembly::new();
-        let mut ast: Vec<Instruction> = vec!();
-        syntax.parse_str(source.as_slice(), &mut ast).unwrap();
-        assert_eq!(ast.shift(), Some(WBMark(1)));
-        assert_eq!(ast.shift(), Some(WBCall(2)));
-        assert_eq!(ast.shift(), Some(WBJump(1)));
-        assert_eq!(ast.shift(), Some(WBJumpIfZero(3)));
-        assert_eq!(ast.shift(), Some(WBJumpIfNegative(1)));
-        assert_eq!(ast.shift(), Some(WBReturn));
-        assert_eq!(ast.shift(), Some(WBExit));
-        assert!(ast.shift().is_none());
-    }
-
-    #[test]
-    fn test_parse_io() {
-        let source = vec!(
             "PUTC",
             "PUTN",
             "GETC",
             "GETN",
             ).connect("\n");
-        let syntax = Assembly::new();
-        let mut ast: Vec<Instruction> = vec!();
-        syntax.parse_str(source.as_slice(), &mut ast).unwrap();
-        assert_eq!(ast.shift(), Some(WBPutCharactor));
-        assert_eq!(ast.shift(), Some(WBPutNumber));
-        assert_eq!(ast.shift(), Some(WBGetCharactor));
-        assert_eq!(ast.shift(), Some(WBGetNumber));
-        assert!(ast.shift().is_none());
+        let mut writer = MemWriter::new();
+        {
+            let syntax = Assembly::new();
+            let mut buffer = BufReader::new(source.as_slice().as_bytes());
+            syntax.compile(&mut buffer, &mut writer).unwrap();
+        }
+        let mut reader = MemReader::new(writer.unwrap());
+        assert_eq!(reader.read_inst(), Ok((CMD_PUSH, 1)));
+        assert_eq!(reader.read_inst(), Ok((CMD_DUP, 0)));
+        assert_eq!(reader.read_inst(), Ok((CMD_COPY, 2)));
+        assert_eq!(reader.read_inst(), Ok((CMD_SWAP, 0)));
+        assert_eq!(reader.read_inst(), Ok((CMD_DISCARD, 0)));
+        assert_eq!(reader.read_inst(), Ok((CMD_SLIDE, 3)));
+        assert_eq!(reader.read_inst(), Ok((CMD_ADD, 0)));
+        assert_eq!(reader.read_inst(), Ok((CMD_SUB, 0)));
+        assert_eq!(reader.read_inst(), Ok((CMD_MUL, 0)));
+        assert_eq!(reader.read_inst(), Ok((CMD_DIV, 0)));
+        assert_eq!(reader.read_inst(), Ok((CMD_MOD, 0)));
+        assert_eq!(reader.read_inst(), Ok((CMD_STORE, 0)));
+        assert_eq!(reader.read_inst(), Ok((CMD_RETRIEVE, 0)));
+        assert_eq!(reader.read_inst(), Ok((CMD_MARK, 4)));
+        assert_eq!(reader.read_inst(), Ok((CMD_CALL, 5)));
+        assert_eq!(reader.read_inst(), Ok((CMD_JUMP, 6)));
+        assert_eq!(reader.read_inst(), Ok((CMD_JUMPZ, 7)));
+        assert_eq!(reader.read_inst(), Ok((CMD_JUMPN, 8)));
+        assert_eq!(reader.read_inst(), Ok((CMD_RETURN, 0)));
+        assert_eq!(reader.read_inst(), Ok((CMD_EXIT, 0)));
+        assert_eq!(reader.read_inst(), Ok((CMD_PUTC, 0)));
+        assert_eq!(reader.read_inst(), Ok((CMD_PUTN, 0)));
+        assert_eq!(reader.read_inst(), Ok((CMD_GETC, 0)));
+        assert_eq!(reader.read_inst(), Ok((CMD_GETN, 0)));
+        assert!(reader.read_inst().is_err());
     }
 
     #[test]
-    fn test_generate() {
+    fn test_disassemble() {
         let mut writer = MemWriter::new();
         {
             let mut bcw = MemWriter::new();
@@ -280,7 +230,7 @@ mod test {
             "PUSH 1", "DUP", "COPY 2", "SWAP", "DISCARD", "SLIDE 3",
             "ADD", "SUB", "MUL", "DIV", "MOD",
             "STORE", "RETRIEVE",
-            "MARK 1", "CALL F", "JUMP 2", "JUMPZ 10", "JUMPN 20", "RETURN", "EXIT",
+            "MARK 1", "CALL 15", "JUMP 2", "JUMPZ 16", "JUMPN 32", "RETURN", "EXIT",
             "PUTC", "PUTN", "GETC", "GETN", ""
             ).connect("\n");
         assert_eq!(result, expected.as_slice());

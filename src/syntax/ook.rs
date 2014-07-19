@@ -1,11 +1,46 @@
 //! Parser for Ook!
 
+#![experimental]
+
 use std::io::{EndOfFile, InvalidInput, IoError, IoResult, standard_error};
 use std::str::from_utf8;
 
-use ir::Instruction;
-use syntax::Compiler;
-use syntax::brainfuck::{Parser, Token, MoveRight, MoveLeft, Increment, Decrement, Put, Get, LoopStart, LoopEnd};
+use bytecode::ByteCodeWriter;
+use syntax::Compile;
+use syntax::brainfuck::{Instructions, Token, MoveRight, MoveLeft, Increment, Decrement, Put, Get, LoopStart, LoopEnd};
+
+struct Tokens<T> {
+    lexemes: T,
+}
+
+impl<I: Iterator<IoResult<String>>> Tokens<I> {
+    pub fn parse(self) -> Instructions<Tokens<I>> { Instructions::new(self) }
+}
+
+impl<I: Iterator<IoResult<String>>> Iterator<IoResult<Token>> for Tokens<I> {
+    fn next(&mut self) -> Option<IoResult<Token>> {
+        let op = self.lexemes.next();
+        if op.is_none() { return None; }
+
+        let res = op.unwrap();
+         match res {
+             Err(e) => return Some(Err(e)),
+             Ok(_) => (),
+        }
+
+        Some(match res.unwrap().as_slice() {
+            "Ook. Ook?" => Ok(MoveRight),
+            "Ook? Ook." => Ok(MoveLeft),
+            "Ook. Ook." => Ok(Increment),
+            "Ook! Ook!" => Ok(Decrement),
+            "Ook. Ook!" => Ok(Get),
+            "Ook! Ook." => Ok(Put),
+            "Ook! Ook?" => Ok(LoopStart),
+            "Ook? Ook!" => Ok(LoopEnd),
+            _ => Err(standard_error(InvalidInput)),
+        })
+    }
+}
 
 fn is_whitespace(c: &char) -> bool {
     *c == ' ' || is_linebreak(c)
@@ -18,6 +53,10 @@ fn is_linebreak(c: &char) -> bool {
 struct Scan<'r, T> {
     buffer: &'r mut T,
     is_start: bool,
+}
+
+impl<'r, B: Buffer> Scan<'r, B> {
+    pub fn tokenize(self) -> Tokens<Scan<'r, B>> { Tokens { lexemes: self } }
 }
 
 impl<'r, B: Buffer> Iterator<IoResult<String>> for Scan<'r, B> {
@@ -67,33 +106,8 @@ impl<'r, B: Buffer> Iterator<IoResult<String>> for Scan<'r, B> {
     }
 }
 
-struct Tokens<T> {
-    iter: T,
-}
-
-impl<I: Iterator<IoResult<String>>> Iterator<IoResult<Token>> for Tokens<I> {
-    fn next(&mut self) -> Option<IoResult<Token>> {
-        let op = self.iter.next();
-        if op.is_none() { return None; }
-
-        let res = op.unwrap();
-         match res {
-             Err(e) => return Some(Err(e)),
-             Ok(_) => (),
-        }
-
-        Some(match res.unwrap().as_slice() {
-            "Ook. Ook?" => Ok(MoveRight),
-            "Ook? Ook." => Ok(MoveLeft),
-            "Ook. Ook." => Ok(Increment),
-            "Ook! Ook!" => Ok(Decrement),
-            "Ook. Ook!" => Ok(Get),
-            "Ook! Ook." => Ok(Put),
-            "Ook! Ook?" => Ok(LoopStart),
-            "Ook? Ook!" => Ok(LoopEnd),
-            _ => Err(standard_error(InvalidInput)),
-        })
-    }
+fn scan<'r, B: Buffer>(buffer: &'r mut B) -> Scan<'r, B> {
+    Scan { buffer: buffer, is_start: true }
 }
 
 /// Compiler for Ook!.
@@ -104,24 +118,22 @@ impl Ook {
     pub fn new() -> Ook { Ook }
 }
 
-impl Compiler for Ook {
-    fn parse<B: Buffer>(&self, input: &mut B, output: &mut Vec<Instruction>) -> IoResult<()> {
-        Parser::new(Tokens { iter: Scan { buffer: input, is_start: true } }).parse(output)
+impl Compile for Ook {
+    fn compile<B: Buffer, W: ByteCodeWriter>(&self, input: &mut B, output: &mut W) -> IoResult<()> {
+        let mut it = scan(input).tokenize().parse();
+        output.assemble(&mut it)
     }
 }
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use ir::*;
-    use syntax::*;
     use syntax::brainfuck::*;
     use std::io::BufReader;
 
     #[test]
     fn test_scan() {
         let mut buffer = BufReader::new("Ook? Ook. Ook! Ook.\nOok. Ook? Ook.".as_bytes());
-        let mut it = super::Scan { buffer: &mut buffer, is_start: true };
+        let mut it = super::scan(&mut buffer);
         assert_eq!(it.next(), Some(Ok("Ook? Ook.".to_string())));
         assert_eq!(it.next(), Some(Ok("Ook! Ook.".to_string())));
         assert_eq!(it.next(), Some(Ok("Ook. Ook?".to_string())));
@@ -141,7 +153,7 @@ mod test {
             "Ook? Ook!",
             ).connect(" ");
         let mut buffer = BufReader::new(source.as_slice().as_bytes());
-        let mut it = super::Tokens { iter: super::Scan { buffer: &mut buffer, is_start: true } };
+        let mut it = super::scan(&mut buffer).tokenize();
         assert_eq!(it.next(), Some(Ok(MoveRight)));
         assert_eq!(it.next(), Some(Ok(MoveLeft)));
         assert_eq!(it.next(), Some(Ok(Increment)));
@@ -151,127 +163,5 @@ mod test {
         assert_eq!(it.next(), Some(Ok(LoopStart)));
         assert_eq!(it.next(), Some(Ok(LoopEnd)));
         assert!(it.next().is_none());
-    }
-
-    #[test]
-    fn test_ptr() {
-        let syntax = Ook::new();
-
-        let source = "Ook. Ook?";
-        let mut ast = vec!();
-        syntax.parse_str(source.as_slice(), &mut ast).unwrap();
-        assert_eq!(ast.shift(), Some(WBPush(BF_PTR_ADDR)));
-        assert_eq!(ast.shift(), Some(WBDuplicate));
-        assert_eq!(ast.shift(), Some(WBRetrieve));
-        assert_eq!(ast.shift(), Some(WBPush(1)));
-        assert_eq!(ast.shift(), Some(WBAddition));
-        assert_eq!(ast.shift(), Some(WBStore));
-        assert_eq!(ast.shift(), Some(WBExit));
-        assert_eq!(ast.shift(), Some(WBMark(BF_FAIL_MARKER)));
-        assert!(ast.shift().is_none());
-
-        let source = "Ook? Ook.";
-        let mut ast = vec!();
-        syntax.parse_str(source.as_slice(), &mut ast).unwrap();
-        assert_eq!(ast.shift(), Some(WBPush(BF_PTR_ADDR)));
-        assert_eq!(ast.shift(), Some(WBDuplicate));
-        assert_eq!(ast.shift(), Some(WBRetrieve));
-        assert_eq!(ast.shift(), Some(WBPush(1)));
-        assert_eq!(ast.shift(), Some(WBSubtraction));
-        assert_eq!(ast.shift(), Some(WBDuplicate));
-        assert_eq!(ast.shift(), Some(WBJumpIfNegative(BF_FAIL_MARKER)));
-        assert_eq!(ast.shift(), Some(WBStore));
-        assert_eq!(ast.shift(), Some(WBExit));
-        assert_eq!(ast.shift(), Some(WBMark(BF_FAIL_MARKER)));
-        assert!(ast.shift().is_none());
-    }
-
-    #[test]
-    fn test_incdec() {
-        let syntax = Ook::new();
-
-        let source = "Ook. Ook.";
-        let mut ast = vec!();
-        syntax.parse_str(source.as_slice(), &mut ast).unwrap();
-        assert_eq!(ast.shift(), Some(WBPush(BF_PTR_ADDR)));
-        assert_eq!(ast.shift(), Some(WBRetrieve));
-        assert_eq!(ast.shift(), Some(WBDuplicate));
-        assert_eq!(ast.shift(), Some(WBRetrieve));
-        assert_eq!(ast.shift(), Some(WBPush(1)));
-        assert_eq!(ast.shift(), Some(WBAddition));
-        assert_eq!(ast.shift(), Some(WBStore));
-        assert_eq!(ast.shift(), Some(WBExit));
-        assert_eq!(ast.shift(), Some(WBMark(BF_FAIL_MARKER)));
-        assert!(ast.shift().is_none());
-
-        let source = "Ook! Ook!";
-        let mut ast = vec!();
-        syntax.parse_str(source.as_slice(), &mut ast).unwrap();
-        assert_eq!(ast.shift(), Some(WBPush(BF_PTR_ADDR)));
-        assert_eq!(ast.shift(), Some(WBRetrieve));
-        assert_eq!(ast.shift(), Some(WBDuplicate));
-        assert_eq!(ast.shift(), Some(WBRetrieve));
-        assert_eq!(ast.shift(), Some(WBPush(1)));
-        assert_eq!(ast.shift(), Some(WBSubtraction));
-        assert_eq!(ast.shift(), Some(WBStore));
-        assert_eq!(ast.shift(), Some(WBExit));
-        assert_eq!(ast.shift(), Some(WBMark(BF_FAIL_MARKER)));
-        assert!(ast.shift().is_none());
-    }
-
-    #[test]
-    fn test_io() {
-        let syntax = Ook::new();
-
-        let source = "Ook. Ook!";
-        let mut ast = vec!();
-        syntax.parse_str(source.as_slice(), &mut ast).unwrap();
-        assert_eq!(ast.shift(), Some(WBPush(BF_PTR_ADDR)));
-        assert_eq!(ast.shift(), Some(WBRetrieve));
-        assert_eq!(ast.shift(), Some(WBRetrieve));
-        assert_eq!(ast.shift(), Some(WBGetCharactor));
-        assert_eq!(ast.shift(), Some(WBExit));
-        assert_eq!(ast.shift(), Some(WBMark(BF_FAIL_MARKER)));
-        assert!(ast.shift().is_none());
-
-        let source = "Ook! Ook.";
-        let mut ast = vec!();
-        syntax.parse_str(source.as_slice(), &mut ast).unwrap();
-        assert_eq!(ast.shift(), Some(WBPush(BF_PTR_ADDR)));
-        assert_eq!(ast.shift(), Some(WBRetrieve));
-        assert_eq!(ast.shift(), Some(WBRetrieve));
-        assert_eq!(ast.shift(), Some(WBPutCharactor));
-        assert_eq!(ast.shift(), Some(WBExit));
-        assert_eq!(ast.shift(), Some(WBMark(BF_FAIL_MARKER)));
-        assert!(ast.shift().is_none());
-    }
-
-    #[test]
-    fn test_loop() {
-        let source = "Ook! Ook? Ook! Ook? Ook? Ook! Ook? Ook!";
-        let syntax = Ook::new();
-        let mut ast = vec!();
-        syntax.parse_str(source.as_slice(), &mut ast).unwrap();
-        // outer loop
-        assert_eq!(ast.shift(), Some(WBMark(1)));
-        assert_eq!(ast.shift(), Some(WBPush(BF_PTR_ADDR)));
-        assert_eq!(ast.shift(), Some(WBRetrieve));
-        assert_eq!(ast.shift(), Some(WBRetrieve));
-        assert_eq!(ast.shift(), Some(WBJumpIfZero(2)));
-        // inner loop
-        assert_eq!(ast.shift(), Some(WBMark(3)));
-        assert_eq!(ast.shift(), Some(WBPush(BF_PTR_ADDR)));
-        assert_eq!(ast.shift(), Some(WBRetrieve));
-        assert_eq!(ast.shift(), Some(WBRetrieve));
-        assert_eq!(ast.shift(), Some(WBJumpIfZero(4)));
-        assert_eq!(ast.shift(), Some(WBJump(3)));
-        assert_eq!(ast.shift(), Some(WBMark(4)));
-        // outer loop
-        assert_eq!(ast.shift(), Some(WBJump(1)));
-        assert_eq!(ast.shift(), Some(WBMark(2)));
-
-        assert_eq!(ast.shift(), Some(WBExit));
-        assert_eq!(ast.shift(), Some(WBMark(BF_FAIL_MARKER)));
-        assert!(ast.shift().is_none());
     }
 }

@@ -1,4 +1,6 @@
-//! Intermediate representation of instruction set.
+//! Intermediate representations of instruction set.
+
+#![experimental]
 
 #[allow(missing_doc)]
 #[deriving(PartialEq, Show, Clone)]
