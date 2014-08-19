@@ -146,11 +146,9 @@ mod test {
     use std::io::{BufReader, MemReader, MemWriter};
     use std::str::from_utf8;
 
-    use super::*;
-    use syntax::*;
-    use syntax::whitespace::*;
-
     use bytecode::ByteCodeWriter;
+    use syntax::Decompiler;
+    use syntax::whitespace::{Space, Tab, LF};
 
     static S: &'static str = "ど";
     static T: &'static str = "童貞ちゃうわっ！";
@@ -209,7 +207,7 @@ mod test {
             bcw.write_getn().unwrap();
 
             let mut bcr = MemReader::new(bcw.unwrap());
-            let syntax = DT::new();
+            let syntax = super::DT::new();
             syntax.decompile(&mut bcr, &mut writer).unwrap();
         }
         let result = from_utf8(writer.get_ref()).unwrap();

@@ -53,7 +53,7 @@ impl<I: Iterator<IoResult<Token>>> Instructions<I> {
 
 impl<I: Iterator<IoResult<Token>>> Iterator<IoResult<Instruction>> for Instructions<I> {
     fn next(&mut self) -> Option<IoResult<Instruction>> {
-        match self.buffer.shift() {
+        match self.buffer.remove(0) {
             Some(i) => Some(i),
             None => {
                 let ret = match self.tokens.next() {
@@ -139,7 +139,7 @@ impl<I: Iterator<IoResult<Token>>> Iterator<IoResult<Instruction>> for Instructi
                     }
                 };
                 self.buffer.push_all(ret.as_slice());
-                self.buffer.shift()
+                self.buffer.remove(0)
             }
         }
     }
@@ -234,7 +234,6 @@ impl Compiler for Brainfuck {
 
 #[cfg(test)]
 mod test {
-    use super::*;
     use ir::*;
     use std::io::BufReader;
 
@@ -257,14 +256,14 @@ mod test {
     fn test_tokenize() {
         let mut buffer = BufReader::new("><+- ,.\n[饂飩]".as_bytes());
         let mut it = super::scan(&mut buffer).tokenize();
-        assert_eq!(it.next(), Some(Ok(MoveRight)));
-        assert_eq!(it.next(), Some(Ok(MoveLeft)));
-        assert_eq!(it.next(), Some(Ok(Increment)));
-        assert_eq!(it.next(), Some(Ok(Decrement)));
-        assert_eq!(it.next(), Some(Ok(Get)));
-        assert_eq!(it.next(), Some(Ok(Put)));
-        assert_eq!(it.next(), Some(Ok(LoopStart)));
-        assert_eq!(it.next(), Some(Ok(LoopEnd)));
+        assert_eq!(it.next(), Some(Ok(super::MoveRight)));
+        assert_eq!(it.next(), Some(Ok(super::MoveLeft)));
+        assert_eq!(it.next(), Some(Ok(super::Increment)));
+        assert_eq!(it.next(), Some(Ok(super::Decrement)));
+        assert_eq!(it.next(), Some(Ok(super::Get)));
+        assert_eq!(it.next(), Some(Ok(super::Put)));
+        assert_eq!(it.next(), Some(Ok(super::LoopStart)));
+        assert_eq!(it.next(), Some(Ok(super::LoopEnd)));
         assert!(it.next().is_none());
     }
 
@@ -272,33 +271,33 @@ mod test {
     fn test_parse() {
         let mut buffer = BufReader::new(">".as_bytes());
         let mut it = super::scan(&mut buffer).tokenize().parse();
-        assert_eq!(it.next(), Some(Ok(StackPush(BF_PTR_ADDR))));
+        assert_eq!(it.next(), Some(Ok(StackPush(super::BF_PTR_ADDR))));
         assert_eq!(it.next(), Some(Ok(StackDuplicate)));
         assert_eq!(it.next(), Some(Ok(HeapRetrieve)));
         assert_eq!(it.next(), Some(Ok(StackPush(1))));
         assert_eq!(it.next(), Some(Ok(Addition)));
         assert_eq!(it.next(), Some(Ok(HeapStore)));
         assert_eq!(it.next(), Some(Ok(Exit)));
-        assert_eq!(it.next(), Some(Ok(Mark(BF_FAIL_MARKER))));
+        assert_eq!(it.next(), Some(Ok(Mark(super::BF_FAIL_MARKER))));
         assert!(it.next().is_none());
 
         let mut buffer = BufReader::new("<".as_bytes());
         let mut it = super::scan(&mut buffer).tokenize().parse();
-        assert_eq!(it.next(), Some(Ok(StackPush(BF_PTR_ADDR))));
+        assert_eq!(it.next(), Some(Ok(StackPush(super::BF_PTR_ADDR))));
         assert_eq!(it.next(), Some(Ok(StackDuplicate)));
         assert_eq!(it.next(), Some(Ok(HeapRetrieve)));
         assert_eq!(it.next(), Some(Ok(StackPush(1))));
         assert_eq!(it.next(), Some(Ok(Subtraction)));
         assert_eq!(it.next(), Some(Ok(StackDuplicate)));
-        assert_eq!(it.next(), Some(Ok(JumpIfNegative(BF_FAIL_MARKER))));
+        assert_eq!(it.next(), Some(Ok(JumpIfNegative(super::BF_FAIL_MARKER))));
         assert_eq!(it.next(), Some(Ok(HeapStore)));
         assert_eq!(it.next(), Some(Ok(Exit)));
-        assert_eq!(it.next(), Some(Ok(Mark(BF_FAIL_MARKER))));
+        assert_eq!(it.next(), Some(Ok(Mark(super::BF_FAIL_MARKER))));
         assert!(it.next().is_none());
 
         let mut buffer = BufReader::new("+".as_bytes());
         let mut it = super::scan(&mut buffer).tokenize().parse();
-        assert_eq!(it.next(), Some(Ok(StackPush(BF_PTR_ADDR))));
+        assert_eq!(it.next(), Some(Ok(StackPush(super::BF_PTR_ADDR))));
         assert_eq!(it.next(), Some(Ok(HeapRetrieve)));
         assert_eq!(it.next(), Some(Ok(StackDuplicate)));
         assert_eq!(it.next(), Some(Ok(HeapRetrieve)));
@@ -306,12 +305,12 @@ mod test {
         assert_eq!(it.next(), Some(Ok(Addition)));
         assert_eq!(it.next(), Some(Ok(HeapStore)));
         assert_eq!(it.next(), Some(Ok(Exit)));
-        assert_eq!(it.next(), Some(Ok(Mark(BF_FAIL_MARKER))));
+        assert_eq!(it.next(), Some(Ok(Mark(super::BF_FAIL_MARKER))));
         assert!(it.next().is_none());
 
         let mut buffer = BufReader::new("-".as_bytes());
         let mut it = super::scan(&mut buffer).tokenize().parse();
-        assert_eq!(it.next(), Some(Ok(StackPush(BF_PTR_ADDR))));
+        assert_eq!(it.next(), Some(Ok(StackPush(super::BF_PTR_ADDR))));
         assert_eq!(it.next(), Some(Ok(HeapRetrieve)));
         assert_eq!(it.next(), Some(Ok(StackDuplicate)));
         assert_eq!(it.next(), Some(Ok(HeapRetrieve)));
@@ -319,40 +318,40 @@ mod test {
         assert_eq!(it.next(), Some(Ok(Subtraction)));
         assert_eq!(it.next(), Some(Ok(HeapStore)));
         assert_eq!(it.next(), Some(Ok(Exit)));
-        assert_eq!(it.next(), Some(Ok(Mark(BF_FAIL_MARKER))));
+        assert_eq!(it.next(), Some(Ok(Mark(super::BF_FAIL_MARKER))));
         assert!(it.next().is_none());
 
         let mut buffer = BufReader::new(",".as_bytes());
         let mut it = super::scan(&mut buffer).tokenize().parse();
-        assert_eq!(it.next(), Some(Ok(StackPush(BF_PTR_ADDR))));
+        assert_eq!(it.next(), Some(Ok(StackPush(super::BF_PTR_ADDR))));
         assert_eq!(it.next(), Some(Ok(HeapRetrieve)));
         assert_eq!(it.next(), Some(Ok(HeapRetrieve)));
         assert_eq!(it.next(), Some(Ok(GetCharactor)));
         assert_eq!(it.next(), Some(Ok(Exit)));
-        assert_eq!(it.next(), Some(Ok(Mark(BF_FAIL_MARKER))));
+        assert_eq!(it.next(), Some(Ok(Mark(super::BF_FAIL_MARKER))));
         assert!(it.next().is_none());
 
         let mut buffer = BufReader::new(".".as_bytes());
         let mut it = super::scan(&mut buffer).tokenize().parse();
-        assert_eq!(it.next(), Some(Ok(StackPush(BF_PTR_ADDR))));
+        assert_eq!(it.next(), Some(Ok(StackPush(super::BF_PTR_ADDR))));
         assert_eq!(it.next(), Some(Ok(HeapRetrieve)));
         assert_eq!(it.next(), Some(Ok(HeapRetrieve)));
         assert_eq!(it.next(), Some(Ok(PutCharactor)));
         assert_eq!(it.next(), Some(Ok(Exit)));
-        assert_eq!(it.next(), Some(Ok(Mark(BF_FAIL_MARKER))));
+        assert_eq!(it.next(), Some(Ok(Mark(super::BF_FAIL_MARKER))));
         assert!(it.next().is_none());
 
         let mut buffer = BufReader::new("[[]]".as_bytes());
         let mut it = super::scan(&mut buffer).tokenize().parse();
         // outer loop
         assert_eq!(it.next(), Some(Ok(Mark(1))));
-        assert_eq!(it.next(), Some(Ok(StackPush(BF_PTR_ADDR))));
+        assert_eq!(it.next(), Some(Ok(StackPush(super::BF_PTR_ADDR))));
         assert_eq!(it.next(), Some(Ok(HeapRetrieve)));
         assert_eq!(it.next(), Some(Ok(HeapRetrieve)));
         assert_eq!(it.next(), Some(Ok(JumpIfZero(2))));
         // inner loop
         assert_eq!(it.next(), Some(Ok(Mark(3))));
-        assert_eq!(it.next(), Some(Ok(StackPush(BF_PTR_ADDR))));
+        assert_eq!(it.next(), Some(Ok(StackPush(super::BF_PTR_ADDR))));
         assert_eq!(it.next(), Some(Ok(HeapRetrieve)));
         assert_eq!(it.next(), Some(Ok(HeapRetrieve)));
         assert_eq!(it.next(), Some(Ok(JumpIfZero(4))));
@@ -363,7 +362,7 @@ mod test {
         assert_eq!(it.next(), Some(Ok(Mark(2))));
 
         assert_eq!(it.next(), Some(Ok(Exit)));
-        assert_eq!(it.next(), Some(Ok(Mark(BF_FAIL_MARKER))));
+        assert_eq!(it.next(), Some(Ok(Mark(super::BF_FAIL_MARKER))));
         assert!(it.next().is_none());
     }
 }

@@ -126,9 +126,10 @@ impl Decompiler for Assembly {
 mod test {
     use std::io::{BufReader, MemReader, MemWriter};
     use std::str::from_utf8;
-    use super::*;
-    use bytecode::*;
-    use syntax::*;
+
+    use bytecode;
+    use bytecode::{ByteCodeReader, ByteCodeWriter};
+    use syntax::{Compiler, Decompiler};
 
     #[test]
     fn test_assemble() {
@@ -160,35 +161,35 @@ mod test {
             ).connect("\n");
         let mut writer = MemWriter::new();
         {
-            let syntax = Assembly::new();
+            let syntax = super::Assembly::new();
             let mut buffer = BufReader::new(source.as_slice().as_bytes());
             syntax.compile(&mut buffer, &mut writer).unwrap();
         }
         let mut reader = MemReader::new(writer.unwrap());
-        assert_eq!(reader.read_inst(), Ok((CMD_PUSH, 1)));
-        assert_eq!(reader.read_inst(), Ok((CMD_DUP, 0)));
-        assert_eq!(reader.read_inst(), Ok((CMD_COPY, 2)));
-        assert_eq!(reader.read_inst(), Ok((CMD_SWAP, 0)));
-        assert_eq!(reader.read_inst(), Ok((CMD_DISCARD, 0)));
-        assert_eq!(reader.read_inst(), Ok((CMD_SLIDE, 3)));
-        assert_eq!(reader.read_inst(), Ok((CMD_ADD, 0)));
-        assert_eq!(reader.read_inst(), Ok((CMD_SUB, 0)));
-        assert_eq!(reader.read_inst(), Ok((CMD_MUL, 0)));
-        assert_eq!(reader.read_inst(), Ok((CMD_DIV, 0)));
-        assert_eq!(reader.read_inst(), Ok((CMD_MOD, 0)));
-        assert_eq!(reader.read_inst(), Ok((CMD_STORE, 0)));
-        assert_eq!(reader.read_inst(), Ok((CMD_RETRIEVE, 0)));
-        assert_eq!(reader.read_inst(), Ok((CMD_MARK, 4)));
-        assert_eq!(reader.read_inst(), Ok((CMD_CALL, 5)));
-        assert_eq!(reader.read_inst(), Ok((CMD_JUMP, 6)));
-        assert_eq!(reader.read_inst(), Ok((CMD_JUMPZ, 7)));
-        assert_eq!(reader.read_inst(), Ok((CMD_JUMPN, 8)));
-        assert_eq!(reader.read_inst(), Ok((CMD_RETURN, 0)));
-        assert_eq!(reader.read_inst(), Ok((CMD_EXIT, 0)));
-        assert_eq!(reader.read_inst(), Ok((CMD_PUTC, 0)));
-        assert_eq!(reader.read_inst(), Ok((CMD_PUTN, 0)));
-        assert_eq!(reader.read_inst(), Ok((CMD_GETC, 0)));
-        assert_eq!(reader.read_inst(), Ok((CMD_GETN, 0)));
+        assert_eq!(reader.read_inst(), Ok((bytecode::CMD_PUSH, 1)));
+        assert_eq!(reader.read_inst(), Ok((bytecode::CMD_DUP, 0)));
+        assert_eq!(reader.read_inst(), Ok((bytecode::CMD_COPY, 2)));
+        assert_eq!(reader.read_inst(), Ok((bytecode::CMD_SWAP, 0)));
+        assert_eq!(reader.read_inst(), Ok((bytecode::CMD_DISCARD, 0)));
+        assert_eq!(reader.read_inst(), Ok((bytecode::CMD_SLIDE, 3)));
+        assert_eq!(reader.read_inst(), Ok((bytecode::CMD_ADD, 0)));
+        assert_eq!(reader.read_inst(), Ok((bytecode::CMD_SUB, 0)));
+        assert_eq!(reader.read_inst(), Ok((bytecode::CMD_MUL, 0)));
+        assert_eq!(reader.read_inst(), Ok((bytecode::CMD_DIV, 0)));
+        assert_eq!(reader.read_inst(), Ok((bytecode::CMD_MOD, 0)));
+        assert_eq!(reader.read_inst(), Ok((bytecode::CMD_STORE, 0)));
+        assert_eq!(reader.read_inst(), Ok((bytecode::CMD_RETRIEVE, 0)));
+        assert_eq!(reader.read_inst(), Ok((bytecode::CMD_MARK, 4)));
+        assert_eq!(reader.read_inst(), Ok((bytecode::CMD_CALL, 5)));
+        assert_eq!(reader.read_inst(), Ok((bytecode::CMD_JUMP, 6)));
+        assert_eq!(reader.read_inst(), Ok((bytecode::CMD_JUMPZ, 7)));
+        assert_eq!(reader.read_inst(), Ok((bytecode::CMD_JUMPN, 8)));
+        assert_eq!(reader.read_inst(), Ok((bytecode::CMD_RETURN, 0)));
+        assert_eq!(reader.read_inst(), Ok((bytecode::CMD_EXIT, 0)));
+        assert_eq!(reader.read_inst(), Ok((bytecode::CMD_PUTC, 0)));
+        assert_eq!(reader.read_inst(), Ok((bytecode::CMD_PUTN, 0)));
+        assert_eq!(reader.read_inst(), Ok((bytecode::CMD_GETC, 0)));
+        assert_eq!(reader.read_inst(), Ok((bytecode::CMD_GETN, 0)));
         assert!(reader.read_inst().is_err());
     }
 
@@ -222,7 +223,7 @@ mod test {
             bcw.write_getc().unwrap();
             bcw.write_getn().unwrap();
             let mut bcr = MemReader::new(bcw.unwrap());
-            let syntax = Assembly::new();
+            let syntax = super::Assembly::new();
             syntax.decompile(&mut bcr, &mut writer).unwrap();
         }
         let result = from_utf8(writer.get_ref()).unwrap();

@@ -334,10 +334,9 @@ impl Decompiler for Whitespace {
 mod test {
     use std::io::{MemReader, MemWriter};
     use std::str::from_utf8;
-    use super::*;
     use bytecode::ByteCodeWriter;
     use ir::*;
-    use syntax::*;
+    use syntax::Decompiler;
 
     use std::io::BufReader;
 
@@ -355,9 +354,9 @@ mod test {
     fn test_tokenize() {
         let mut buffer = BufReader::new(" [\t饂飩]\n".as_bytes());
         let mut it = super::scan(&mut buffer).tokenize();
-        assert_eq!(it.next(), Some(Ok(Space)));
-        assert_eq!(it.next(), Some(Ok(Tab)));
-        assert_eq!(it.next(), Some(Ok(LF)));
+        assert_eq!(it.next(), Some(Ok(super::Space)));
+        assert_eq!(it.next(), Some(Ok(super::Tab)));
+        assert_eq!(it.next(), Some(Ok(super::LF)));
         assert!(it.next().is_none());
     }
 
@@ -449,7 +448,7 @@ mod test {
             bcw.write_getn().unwrap();
 
             let mut bcr = MemReader::new(bcw.unwrap());
-            let syntax = Whitespace::new();
+            let syntax = super::Whitespace::new();
             syntax.decompile(&mut bcr, &mut writer).unwrap();
         }
         let result = from_utf8(writer.get_ref()).unwrap().replace(" ", "S").replace("\t", "T").replace("\n", "N");

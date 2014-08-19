@@ -127,8 +127,8 @@ impl Compiler for Ook {
 
 #[cfg(test)]
 mod test {
-    use syntax::brainfuck::*;
     use std::io::BufReader;
+    use syntax::brainfuck::{MoveRight, MoveLeft, Increment, Decrement, Put, Get, LoopStart, LoopEnd};
 
     #[test]
     fn test_scan() {

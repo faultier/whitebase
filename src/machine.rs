@@ -111,7 +111,7 @@ impl<B: Buffer, W: Writer> Machine<B, W> {
         let mut i = 0;
         let mut tmp = vec!();
         while i < n {
-            tmp.unshift(self.stack.pop().unwrap());
+            tmp.insert(0, self.stack.pop().unwrap());
             i += 1;
         }
         let val = self.stack.pop().unwrap();
@@ -331,7 +331,6 @@ mod test {
     use std::collections::HashMap;
     use std::io::{BufWriter, MemReader, MemWriter};
     use std::io::util::{NullReader, NullWriter};
-    use super::*;
     use bytecode::ByteCodeWriter;
 
     #[test]
@@ -345,7 +344,7 @@ mod test {
         bcw.write_slide(1).unwrap();
 
         let mut bcr = MemReader::new(bcw.unwrap());
-        let mut vm = Machine::new(NullReader, NullWriter);
+        let mut vm = super::Machine::new(NullReader, NullWriter);
         let mut caller = vec!();
         let mut index = HashMap::new();
         vm.step(&mut bcr, &mut index, &mut caller).unwrap();
@@ -373,7 +372,7 @@ mod test {
         bcw.write_mod().unwrap();
 
         let mut bcr = MemReader::new(bcw.unwrap());
-        let mut vm = Machine::new(NullReader, NullWriter);
+        let mut vm = super::Machine::new(NullReader, NullWriter);
         let mut caller = vec!();
         let mut index = HashMap::new();
         vm.stack.push_all([2, 19, 2, 5, 1, 1]);
@@ -397,7 +396,7 @@ mod test {
         bcw.write_retrieve().unwrap();
 
         let mut bcr = MemReader::new(bcw.unwrap());
-        let mut vm = Machine::new(NullReader, NullWriter);
+        let mut vm = super::Machine::new(NullReader, NullWriter);
         let mut caller = vec!();
         let mut index = HashMap::new();
         vm.stack.push_all([1, 1, 2]);
@@ -424,7 +423,7 @@ mod test {
         bcw.write_return().unwrap();
 
         let mut bcr = MemReader::new(bcw.unwrap());
-        let mut vm = Machine::new(NullReader, NullWriter);
+        let mut vm = super::Machine::new(NullReader, NullWriter);
         let mut caller = vec!();
         let mut index = HashMap::new();
         vm.stack.push_all([-1, 0]);
@@ -455,7 +454,7 @@ mod test {
             let mut bcr = MemReader::new(bcw.unwrap());
             let input = MemReader::new(vec!(87, 49, 50, 51, 10));
             let output = BufWriter::new(buf);
-            let mut vm = Machine::new(input, output);
+            let mut vm = super::Machine::new(input, output);
             let mut caller = vec!();
             let mut index = HashMap::new();
             vm.stack.push_all([5, 66, 2, 1]);

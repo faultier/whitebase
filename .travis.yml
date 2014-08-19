@@ -7,4 +7,3 @@ install:
 script:
   - cargo build --verbose
   - cargo test --verbose
-  - rustdoc --test src/lib.rs -L target
